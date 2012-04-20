@@ -83,7 +83,8 @@ struct setting {
 #define SETTING_HOST_EXTRA	10 /**< Host identity additional settings */
 #define SETTING_AUTH		11 /**< Authentication settings */
 #define SETTING_AUTH_EXTRA	12 /**< Authentication additional settings */
-#define SETTING_MISC		13 /**< Miscellaneous settings */
+#define SETTING_CRYPTO		13 /**< Cryptography settings */
+#define SETTING_MISC		14 /**< Miscellaneous settings */
 
 /** @} */
 
@@ -240,6 +241,8 @@ extern struct settings * fetch_setting_origin ( struct settings *settings,
 						struct setting *setting );
 extern int fetch_setting_len ( struct settings *settings,
 			       struct setting *setting );
+extern int fetch_setting_copy ( struct settings *settings,
+				struct setting *setting, void **data );
 extern int fetch_string_setting ( struct settings *settings,
 				  struct setting *setting,
 				  char *data, size_t len );
