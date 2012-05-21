@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2007 Michael Brown <mbrown@fensystems.co.uk>.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of the
+ * License, or any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,18 +39,7 @@
  *
  */
 
-FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1);
-
-/**
- * NFS states
- *
- * These @b must be sequential, i.e. a successful NFS session must
- * pass through each of these states in order.
- */
-enum nfs_state {
-	NFS_CONNECT = 0,
-	NFS_DONE,
-};
+FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
 
 /**
  * A NFS request
@@ -48,13 +55,6 @@ struct nfs_request {
 	struct uri *uri;
 	/** NFS channel interface */
 	struct interface channel;
-
-	/** Current state */
-	enum nfs_state state;
-	/** Buffer to be filled with data received via the channel */
-	char *recvbuf;
-	/** Remaining size of recvbuf */
-	size_t recvsize;
 };
 
 /**
@@ -79,8 +79,8 @@ static void nfs_free ( struct refcnt *refcnt ) {
  * @v rc		Return status code
  */
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
-    if ( nfs->state != NFS_DONE && rc == 0)
-            rc = -ECONNRESET;
+	if ( ! rc )
+		rc = -ECONNRESET;
 	DBGC ( nfs, "NFS %p completed (%s)\n", nfs, strerror ( rc ) );
 
 	/* Close transfer interfaces */
@@ -94,36 +94,8 @@ static void nfs_done ( struct nfs_request *nfs, int rc ) {
  *
  */
 
-/**
- * Handle new data arriving on NFS channel
- *
- * @v ftp		NFS request
- * @v iob		I/O buffer
- * @v meta		Data transfer metadata
- * @ret rc		Return status code
- *
- * Data is collected until a complete line is received, at which point
- * its information is passed to nfs_reply().
- */
-static int nfs_deliver ( struct nfs_request *nfs,
-				 struct io_buffer *iobuf,
-				 struct xfer_metadata *meta __unused ) {
-	char *recvbuf = nfs->recvbuf;
-	size_t recvsize = nfs->recvsize;
-
-	/* Store for next invocation */
-	nfs->recvbuf = recvbuf;
-	nfs->recvsize = recvsize;
-
-	/* Free I/O buffer */
-	free_iob ( iobuf );
-
-	return 0;
-}
-
 /** NFS channel interface operations */
 static struct interface_operation nfs_channel_operations[] = {
-	INTF_OP ( xfer_deliver, struct nfs_request *, nfs_deliver ),
 	INTF_OP ( intf_close, struct nfs_request *, nfs_done ),
 };
 
