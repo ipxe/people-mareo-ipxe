@@ -150,11 +150,12 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	intf_init ( &nfs->channel, &nfs_channel_desc, &nfs->refcnt );
 	nfs->uri = uri_get ( uri );
 
+
 	DBGC ( nfs, "NFS %p fetching %s\n", nfs, nfs->uri->path );
 
 	/* Open control connection */
 	memset ( &server, 0, sizeof ( server ) );
-	server.st_port = htons ( uri_port ( uri, NFS_PORT ) );
+	server.st_port = htons ( uri_port ( uri, PORTMAP_PORT ) );
 	if ( ( rc = xfer_open_named_socket ( &nfs->channel, SOCK_STREAM,
 	                                     ( struct sockaddr * ) &server,
 	                                     uri->host, NULL ) ) != 0 )
