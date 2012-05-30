@@ -9,7 +9,10 @@
 
 FILE_LICENCE ( GPL2_OR_LATER );
 
-/** PORTMAP default port */
-#define PORTMAP_PORT 111
+/** NFS protocol number. */ 
+#define ONCRPC_NFS 100003
+
+/** NFS protocol version. */
+#define NFS_VERS 3
 
 #endif /* _IPXE_FTP_H */

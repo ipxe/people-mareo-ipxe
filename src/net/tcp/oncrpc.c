@@ -40,7 +40,7 @@
  */
 
 /** Set most significant bit to 1. */
-#define SET_LAST_FRAME ( x ) ( (x) |= 1 << 31 )
+#define SET_LAST_FRAME( x ) ( (x) |= 1 << 31 )
 
 #define ONCRPC_HEADER_MAX_SIZE ( sizeof ( struct oncrpc_query_header ) + 512 )
 
@@ -63,8 +63,10 @@ static int iob_add_cred ( struct io_buffer *io_buf, struct oncrpc_cred *cred ) {
 	if ( ! cred )
 		return -EINVAL;
 
-	* (struct oncrpc_cred *) io_buf->tail = *cred;
-	iob_put ( io_buf,  sizeof ( *cred ) );
+	struct oncrpc_cred *buf_cred = io_buf->tail;
+	iob_put ( io_buf,  sizeof ( struct oncrpc_cred ) );
+	buf_cred->flavor = htonl ( cred->flavor );
+	buf_cred->length = htonl ( cred->length );
 
 	switch ( cred->flavor ) {
 		case ONCRPC_AUTH_NONE:
@@ -87,10 +89,11 @@ int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,
 
 	int rc;
 	uint32_t frame_size;
-	struct io_buffer *call_buf = alloc_iob ( ONCRPC_HEADER_MAX_SIZE );
+	struct io_buffer *call_buf = alloc_iob ( ONCRPC_HEADER_MAX_SIZE +
+	                                         iob_len ( io_buf ) );
 
 	if ( ! call_buf )
-		return -ENOMEM;
+		return -ENOBUFS;
 
 	iob_put ( call_buf, sizeof ( struct oncrpc_query_header ) );
 	iob_add_cred ( call_buf, session->credential );
@@ -98,7 +101,8 @@ int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,
 
 	struct oncrpc_query_header *header = ( void * ) call_buf->data;
 
-	frame_size = iob_len ( call_buf ) + iob_len ( io_buf );
+	frame_size = iob_len ( call_buf ) + iob_len ( io_buf ) -
+                     sizeof ( frame_size );
 	SET_LAST_FRAME ( frame_size );
 
 	header->frame_size   = htonl ( frame_size );
@@ -109,13 +113,12 @@ int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,
 	header->prog_vers    = htonl ( session->prog_vers );
 	header->proc_name    = htonl ( proc_name );
 
-	if ( ! ( rc = xfer_deliver_iob ( intf, call_buf ) ) )
-		goto end;
+	memcpy ( call_buf->tail, io_buf->data, iob_len (io_buf));
+	iob_put ( call_buf, iob_len (io_buf) );
 
-	if ( io_buf )
-		rc = xfer_deliver_iob ( intf, io_buf );
+	if ( ( rc = xfer_deliver_iob ( intf, call_buf ) ) != 0 )
+		free_iob ( call_buf );
 
-end:
-	free_iob ( call_buf );
+	free_iob ( io_buf );
 	return rc;
 }

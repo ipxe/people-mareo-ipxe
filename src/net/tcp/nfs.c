@@ -32,6 +32,7 @@
 #include <ipxe/uri.h>
 #include <ipxe/features.h>
 #include <ipxe/nfs.h>
+#include <ipxe/portmap.h>
 
 /** @file
  *
@@ -40,6 +41,8 @@
  */
 
 FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
+
+
 
 /**
  * A NFS request
@@ -88,6 +91,22 @@ static void nfs_done ( struct nfs_request *nfs, int rc ) {
 	intf_shutdown ( &nfs->xfer, rc );
 }
 
+static void nfs_step ( struct nfs_request *nfs )
+{
+	int rc;
+
+	/* Do nothing until socket is ready */
+	if ( ! xfer_window ( &nfs->channel ) )
+		return;
+
+	struct oncrpc_session session;
+	portmap_init_session ( &session );
+	rc = portmap_getport ( &nfs->channel, &session, ONCRPC_NFS, NFS_VERS,
+                               PORTMAP_PROT_TCP );
+
+	nfs_done ( nfs, rc );
+}
+
 /*****************************************************************************
  *
  * NFS channel
@@ -96,6 +115,7 @@ static void nfs_done ( struct nfs_request *nfs, int rc ) {
 
 /** NFS channel interface operations */
 static struct interface_operation nfs_channel_operations[] = {
+	INTF_OP ( xfer_window_changed, struct nfs_request *, nfs_step ),
 	INTF_OP ( intf_close, struct nfs_request *, nfs_done ),
 };
 
@@ -164,6 +184,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	/* Attach to parent interface, mortalise self, and return */
 	intf_plug_plug ( &nfs->xfer, xfer );
 	ref_put ( &nfs->refcnt );
+
 	return 0;
 
 err:

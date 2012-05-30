@@ -66,20 +66,30 @@ void portmap_init_session ( struct oncrpc_session *session ) {
 
 int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
                       uint32_t prog, uint32_t vers, uint32_t prot ) {
+	int rc;
+	struct io_buffer *call_buf;
+
 	if ( ! intf )
 		return -EINVAL;
 	if ( ! session )
 		return -EINVAL;
 
-	struct io_buffer call_buf;
-	struct portmap_mapping query = {
-		.prog = htonl ( prog ),
-		.vers = htonl ( vers ),
-		.prot = htonl ( prot ),
-		.port = htonl ( 0 )
-	};
+	call_buf = alloc_iob ( sizeof ( struct portmap_mapping ) );
+	if ( ! call_buf )
+		return -ENOBUFS;
 
-	iob_populate ( &call_buf, &query, sizeof ( query ), sizeof ( query ) );
+	iob_push ( call_buf, sizeof ( struct portmap_mapping ) );
 
-	return oncrpc_call_iob ( intf, session, PORTMAP_GETPORT, &call_buf );
+	struct portmap_mapping *query = ( void * ) call_buf->data;
+	query->prog = htonl ( prog );
+	query->vers = htonl ( vers );
+	query->prot = htonl ( prot );
+	query->port = htonl ( 0 );
+
+	rc = oncrpc_call_iob ( intf, session, PORTMAP_GETPORT, call_buf );
+
+	if ( rc != 0 )
+		free_iob ( call_buf );
+
+	return rc;
 }
