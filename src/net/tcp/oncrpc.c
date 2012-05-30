@@ -39,3 +39,83 @@
  *
  */
 
+/** Set most significant bit to 1. */
+#define SET_LAST_FRAME ( x ) ( (x) |= 1 << 31 )
+
+#define ONCRPC_HEADER_MAX_SIZE ( sizeof ( struct oncrpc_query_header ) + 512 )
+
+#define ONCRPC_CALL 0
+#define ONCRPC_REPLY 1
+
+struct oncrpc_query_header {
+	uint32_t                frame_size;
+	uint32_t                rpc_id;
+	uint32_t                message_type;
+	uint32_t                rpc_vers;
+	uint32_t                prog_name;
+	uint32_t                prog_vers;
+	uint32_t                proc_name;
+} __packed;
+
+static int iob_add_cred ( struct io_buffer *io_buf, struct oncrpc_cred *cred ) {
+	if ( ! io_buf)
+		return -EINVAL;
+	if ( ! cred )
+		return -EINVAL;
+
+	* (struct oncrpc_cred *) io_buf->tail = *cred;
+	iob_put ( io_buf,  sizeof ( *cred ) );
+
+	switch ( cred->flavor ) {
+		case ONCRPC_AUTH_NONE:
+			break;
+
+		case ONCRPC_AUTH_SYS:
+		case ONCRPC_AUTH_SHORT:
+			return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,
+                       uint32_t proc_name, struct io_buffer *io_buf ) {
+	if ( ! intf )
+		return -EINVAL;
+	if ( ! session )
+		return -EINVAL;
+
+	int rc;
+	uint32_t frame_size;
+	struct io_buffer *call_buf = alloc_iob ( ONCRPC_HEADER_MAX_SIZE );
+
+	if ( ! call_buf )
+		return -ENOMEM;
+
+	iob_put ( call_buf, sizeof ( struct oncrpc_query_header ) );
+	iob_add_cred ( call_buf, session->credential );
+	iob_add_cred ( call_buf, session->verifier );
+
+	struct oncrpc_query_header *header = ( void * ) call_buf->data;
+
+	frame_size = iob_len ( call_buf ) + iob_len ( io_buf );
+	SET_LAST_FRAME ( frame_size );
+
+	header->frame_size   = htonl ( frame_size );
+	header->rpc_id       = htonl ( session->rpc_id++ );
+	header->message_type = htonl ( ONCRPC_CALL );
+	header->rpc_vers     = htonl ( ONCRPC_VERS );
+	header->prog_name    = htonl ( session->prog_name );
+	header->prog_vers    = htonl ( session->prog_vers );
+	header->proc_name    = htonl ( proc_name );
+
+	if ( ! ( rc = xfer_deliver_iob ( intf, call_buf ) ) )
+		goto end;
+
+	if ( io_buf )
+		rc = xfer_deliver_iob ( intf, io_buf );
+
+end:
+	free_iob ( call_buf );
+	return rc;
+}
