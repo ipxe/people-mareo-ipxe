@@ -36,7 +36,6 @@ struct oncrpc_cred_sys {
 	uint32_t               gid;
 	uint32_t               aux_gid[10];
 	char                   *short_id;
-	uint32_t               short_length;
 };
 
 struct oncrpc_session {
@@ -49,10 +48,10 @@ struct oncrpc_session {
 
 struct oncrpc_reply
 {
-	struct oncrpc_cred      *credential;
 	struct oncrpc_cred      *verifier;
 	uint32_t                rpc_id;
-	uint32_t                proc_name;
+	uint32_t                reply_state;
+	uint32_t                accept_state;
 };
 
 int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,

@@ -68,13 +68,20 @@ static int iob_add_cred ( struct io_buffer *io_buf, struct oncrpc_cred *cred ) {
 	buf_cred->flavor = htonl ( cred->flavor );
 	buf_cred->length = htonl ( cred->length );
 
+	struct oncrpc_cred_sys *syscred = ( void * ) cred;
+
 	switch ( cred->flavor ) {
 		case ONCRPC_AUTH_NONE:
 			break;
 
 		case ONCRPC_AUTH_SYS:
-		case ONCRPC_AUTH_SHORT:
 			return -ENOTSUP;
+
+		case ONCRPC_AUTH_SHORT:
+			memcpy ( io_buf->tail, syscred->short_id,
+			         cred->length );
+			iob_put ( io_buf, cred->length );
+			break;
 	}
 
 	return 0;
