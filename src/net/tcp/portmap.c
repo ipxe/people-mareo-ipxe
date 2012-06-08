@@ -46,50 +46,78 @@ static struct oncrpc_cred oncrpc_auth_none = {
 	.length = 0
 };
 
-struct portmap_mapping {
-	uint32_t                prog;
-	uint32_t                vers;
-	uint32_t                prot;
-	uint32_t                port;
-} __packed;
+static struct oncrpc_cred_sys oncrpc_auth_sys __unused = {
+	.credential = { ONCRPC_AUTH_SYS, 20 + 8 },
+	.stamp = 0,
+	.hostname = "atlas",
+	.uid = 0,
+	.gid = 0,
+	.aux_gid_len = 0,
+	.aux_gid = { 0 }
+};
 
 void portmap_init_session ( struct oncrpc_session *session ) {
 	if ( ! session )
 		return;
 
-	session->credential = &oncrpc_auth_none;
-	session->verifier = &oncrpc_auth_none;
-	session->rpc_id = currticks() << 16;
-	session->prog_name = ONCRPC_PORTMAP;
-	session->prog_vers = PORTMAP_VERS;
+	oncrpc_init_session ( session, &oncrpc_auth_none,
+	                      &oncrpc_auth_none, ONCRPC_PORTMAP,
+                              PORTMAP_VERS );
 }
 
-int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
-                      uint32_t prog, uint32_t vers, uint32_t prot ) {
+void portmap_close_session ( struct oncrpc_session *session, int rc ) {
+	oncrpc_close_session ( session, rc );
+}
+
+int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
+                      uint32_t vers, uint32_t prot, oncrpc_callback_t cb ) {
 	int rc;
 	struct io_buffer *call_buf;
 
-	if ( ! intf )
-		return -EINVAL;
 	if ( ! session )
 		return -EINVAL;
 
-	call_buf = alloc_iob ( sizeof ( struct portmap_mapping ) );
-	if ( ! call_buf )
+	if ( ! ( call_buf = alloc_iob ( 4 * sizeof ( uint32_t ) ) ) )
 		return -ENOBUFS;
 
-	iob_push ( call_buf, sizeof ( struct portmap_mapping ) );
+	oncrpc_iob_add_int ( call_buf, prog );
+	oncrpc_iob_add_int ( call_buf, vers );
+	oncrpc_iob_add_int ( call_buf, prot );
+	oncrpc_iob_add_int ( call_buf, 0 );
 
-	struct portmap_mapping *query = ( void * ) call_buf->data;
-	query->prog = htonl ( prog );
-	query->vers = htonl ( vers );
-	query->prot = htonl ( prot );
-	query->port = htonl ( 0 );
-
-	rc = oncrpc_call_iob ( intf, session, PORTMAP_GETPORT, call_buf );
+	rc = oncrpc_call_iob ( session, PORTMAP_GETPORT, call_buf, cb );
 
 	if ( rc != 0 )
 		free_iob ( call_buf );
+
+	return rc;
+}
+
+int portmap_callit ( struct oncrpc_session *session, uint32_t prog,
+                     uint32_t vers, uint32_t proc, struct io_buffer *io_buf,
+                     oncrpc_callback_t cb ) {
+	int rc;
+	struct io_buffer *call_buf;
+
+	if ( ! session )
+		return -EINVAL;
+
+	call_buf = alloc_iob ( 3 * sizeof ( uint32_t ) + iob_len ( io_buf ) );
+	if ( ! call_buf )
+		return -ENOBUFS;
+
+	oncrpc_iob_add_int ( call_buf, prog );
+	oncrpc_iob_add_int ( call_buf, vers );
+	oncrpc_iob_add_int ( call_buf, proc );
+	memcpy ( iob_put ( call_buf, iob_len ( io_buf ) ), io_buf->data,
+	        iob_len ( io_buf ) );
+
+	rc = oncrpc_call_iob ( session, PORTMAP_GETPORT, call_buf, cb );
+
+	if ( rc != 0 )
+		free_iob ( call_buf );
+	else
+		free_iob ( io_buf );
 
 	return rc;
 }

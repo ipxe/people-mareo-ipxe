@@ -22,6 +22,7 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#include <libgen.h>
 #include <byteswap.h>
 #include <ipxe/socket.h>
 #include <ipxe/tcpip.h>
@@ -42,7 +43,16 @@
 
 FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
 
+#define MOUNT_MNT 1
 
+/**
+ * A NFS File handle.
+ *
+ */
+struct nfs_fh {
+	uint8_t               fh[64];
+	size_t                size;
+};
 
 /**
  * A NFS request
@@ -50,15 +60,27 @@ FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
  */
 struct nfs_request {
 	/** Reference counter */
-	struct refcnt refcnt;
+	struct refcnt           refcnt;
 	/** Data transfer interface */
-	struct interface xfer;
+	struct interface        xfer;
+
+	struct oncrpc_session   pm_session;
+	struct oncrpc_session   nfs_session;
+	uint16_t                nfs_port;
+
+	struct nfs_fh           root_fh;
 
 	/** URI being fetched */
-	struct uri *uri;
-	/** NFS channel interface */
-	struct interface channel;
+	struct uri              *uri;
 };
+
+size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
+	fh->size = oncrpc_iob_get_int ( io_buf );
+	oncrpc_iob_get_val ( io_buf, &fh->fh, fh->size );
+	iob_pull ( io_buf, (4 - (fh->size % 4)) % 4 );
+
+	return ( fh->size + (4 - (fh->size % 4)) % 4 );
+}
 
 /**
  * Free NFS request
@@ -82,61 +104,74 @@ static void nfs_free ( struct refcnt *refcnt ) {
  * @v rc		Return status code
  */
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
-	if ( ! rc )
-		rc = -ECONNRESET;
 	DBGC ( nfs, "NFS %p completed (%s)\n", nfs, strerror ( rc ) );
 
-	/* Close transfer interfaces */
-	intf_shutdown ( &nfs->channel, rc );
 	intf_shutdown ( &nfs->xfer, rc );
+	portmap_close_session ( &nfs->pm_session, rc );
+	oncrpc_close_session ( &nfs->nfs_session, rc );
 }
 
-static void nfs_step ( struct nfs_request *nfs )
+static int getport_cb ( struct oncrpc_session *session,
+                        struct oncrpc_reply *reply) {
+	struct nfs_request *nfs =
+		container_of ( session, struct nfs_request, pm_session );
+
+	nfs->nfs_port = oncrpc_iob_get_int ( reply->data );
+
+	return 0;
+}
+
+static int mount_cb ( struct oncrpc_session *session,
+                      struct oncrpc_reply *reply) {
+	int rc = 0;
+	struct nfs_request *nfs =
+		container_of ( session, struct nfs_request, pm_session );
+
+	// Ignore port information sent by PORTMAP.
+	(void) oncrpc_iob_get_int ( reply->data );
+
+
+	nfs_iob_get_fh ( reply->data, &nfs->root_fh );
+
+	if ( ( nfs->nfs_port = uri_port ( nfs->uri, 0 ) ) == 0 ) {
+		rc = portmap_getport ( &nfs->pm_session, ONCRPC_NFS, NFS_VERS,
+		                       PORTMAP_PROT_TCP, &getport_cb );
+	}
+
+	if ( rc != 0 )
+		nfs_done ( nfs, rc );
+
+
+	return rc;
+}
+
+static int nfs_mount ( struct nfs_request *nfs, const char *mountpoint )
 {
 	int rc;
+	struct io_buffer *io_buf;
 
-	/* Do nothing until socket is ready */
-	if ( ! xfer_window ( &nfs->channel ) )
-		return;
 
-	struct oncrpc_session session;
-	portmap_init_session ( &session );
-	rc = portmap_getport ( &nfs->channel, &session, ONCRPC_NFS, NFS_VERS,
-                               PORTMAP_PROT_TCP );
+	if ( ! ( io_buf = alloc_iob ( strlen ( mountpoint ) + 3 ) ) )
+		return -ENOBUFS;
 
-	nfs_done ( nfs, rc );
+	oncrpc_iob_add_string ( io_buf, mountpoint );
+
+	rc = portmap_callit ( &nfs->pm_session, ONCRPC_MOUNT, MOUNT_VERS,
+	                      MOUNT_MNT, io_buf, &mount_cb );
+
+	if ( rc != 0 )
+		nfs_done ( nfs, rc );
+
+	return rc;
 }
 
-/*****************************************************************************
- *
- * NFS channel
- *
- */
-
-/** NFS channel interface operations */
-static struct interface_operation nfs_channel_operations[] = {
-	INTF_OP ( xfer_window_changed, struct nfs_request *, nfs_step ),
-	INTF_OP ( intf_close, struct nfs_request *, nfs_done ),
-};
-
-/** NFS channel interface descriptor */
-static struct interface_descriptor nfs_channel_desc =
-	INTF_DESC ( struct nfs_request, channel, nfs_channel_operations );
-
-/*****************************************************************************
- *
- * Data transfer interface
- *
- */
-
- /** NFS data transfer interface operations */
 static struct interface_operation nfs_xfer_operations[] = {
 	INTF_OP ( intf_close, struct nfs_request *, nfs_done ),
 };
 
+/** NFS data transfer interface descriptor */
 static struct interface_descriptor nfs_xfer_desc =
-	INTF_DESC_PASSTHRU ( struct nfs_request, xfer, nfs_xfer_operations,
-	                     channel );
+	INTF_DESC ( struct nfs_request, xfer, nfs_xfer_operations );
 
 /*****************************************************************************
  *
@@ -153,46 +188,28 @@ static struct interface_descriptor nfs_xfer_desc =
  */
 static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	struct nfs_request *nfs;
-	struct sockaddr_tcpip server;
-	int rc;
 
 	/* Sanity checks */
-	if ( ! uri->path )
-		return -EINVAL;
-	if ( ! uri->host )
+	if ( ! uri->path || ! uri->host )
 		return -EINVAL;
 
 	nfs = zalloc ( sizeof ( *nfs ) );
 	if ( ! nfs )
 		return -ENOMEM;
+
 	ref_init ( &nfs->refcnt, nfs_free );
 	intf_init ( &nfs->xfer, &nfs_xfer_desc, &nfs->refcnt );
-	intf_init ( &nfs->channel, &nfs_channel_desc, &nfs->refcnt );
 	nfs->uri = uri_get ( uri );
 
-
-	DBGC ( nfs, "NFS %p fetching %s\n", nfs, nfs->uri->path );
-
-	/* Open control connection */
-	memset ( &server, 0, sizeof ( server ) );
-	server.st_port = htons ( uri_port ( uri, PORTMAP_PORT ) );
-	if ( ( rc = xfer_open_named_socket ( &nfs->channel, SOCK_STREAM,
-	                                     ( struct sockaddr * ) &server,
-	                                     uri->host, NULL ) ) != 0 )
-		goto err;
+	portmap_init_session ( &nfs->pm_session );
 
 	/* Attach to parent interface, mortalise self, and return */
 	intf_plug_plug ( &nfs->xfer, xfer );
 	ref_put ( &nfs->refcnt );
 
-	return 0;
+	nfs_mount ( nfs, uri->path );
 
-err:
-	DBGC ( nfs, "NFS %p could not create request: %s\n",
-	       nfs, strerror ( rc ) );
-	nfs_done ( nfs, rc );
-	ref_put ( &nfs->refcnt );
-	return rc;
+	return 0;
 }
 
 /** NFS URI opener */

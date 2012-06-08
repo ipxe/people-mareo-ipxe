@@ -1,4 +1,4 @@
-#ifndef _IPXE_PORTMAPC_H
+#ifndef _IPXE_PORTMAP_H
 #define _IPXE_PORTMAP_H
 
 #include <stdint.h>
@@ -29,7 +29,11 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define PORTMAP_PROT_UDP 17
 
 void portmap_init_session ( struct oncrpc_session *session );
-int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
-                      uint32_t prog, uint32_t vers, uint32_t prot );
+void portmap_close_session ( struct oncrpc_session *session, int rc );
+int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
+                      uint32_t vers, uint32_t prot, oncrpc_callback_t cb );
+int portmap_callit ( struct oncrpc_session *session, uint32_t prog,
+                     uint32_t vers, uint32_t proc, struct io_buffer *io_buf,
+                     oncrpc_callback_t cb );
 
-#endif /* _IPXE_ONCRPC_H */
+#endif /* _IPXE_PORTMAP_H */
