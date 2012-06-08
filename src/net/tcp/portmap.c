@@ -41,10 +41,6 @@
  *
  */
 
-static struct oncrpc_cred oncrpc_auth_none = {
-	.flavor = ONCRPC_AUTH_NONE,
-	.length = 0
-};
 
 static struct oncrpc_cred_sys oncrpc_auth_sys __unused = {
 	.credential = { ONCRPC_AUTH_SYS, 20 + 8 },

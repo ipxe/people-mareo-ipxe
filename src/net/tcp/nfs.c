@@ -130,7 +130,6 @@ static int mount_cb ( struct oncrpc_session *session,
 	// Ignore port information sent by PORTMAP.
 	(void) oncrpc_iob_get_int ( reply->data );
 
-
 	nfs_iob_get_fh ( reply->data, &nfs->root_fh );
 
 	if ( ( nfs->nfs_port = uri_port ( nfs->uri, 0 ) ) == 0 ) {
@@ -202,6 +201,8 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	nfs->uri = uri_get ( uri );
 
 	portmap_init_session ( &nfs->pm_session );
+	oncrpc_init_session ( &nfs->nfs_session, &oncrpc_auth_none,
+	                      &oncrpc_auth_none, ONCRPC_NFS, NFS_VERS );
 
 	/* Attach to parent interface, mortalise self, and return */
 	intf_plug_plug ( &nfs->xfer, xfer );

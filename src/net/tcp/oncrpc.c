@@ -48,13 +48,21 @@
 #define ONCRPC_CALL 0
 #define ONCRPC_REPLY 1
 
+struct oncrpc_cred oncrpc_auth_none = {
+	.flavor = ONCRPC_AUTH_NONE,
+	.length = 0
+};
+
 static int oncrpc_deliver ( struct oncrpc_session *session,
                             struct io_buffer *io_buf,
                             struct xfer_metadata *meta );
+static void oncrpc_window_changed ( struct oncrpc_session *session );
 
 static struct interface_operation oncrpc_intf_operations[] = {
 	INTF_OP ( xfer_deliver, struct oncrpc_session *, oncrpc_deliver ),
-	INTF_OP ( intf_close, struct oncrpc_session *, oncrpc_close_session )
+	INTF_OP ( intf_close, struct oncrpc_session *, oncrpc_close_session ),
+	INTF_OP ( xfer_window_changed, struct oncrpc_session *,
+	          oncrpc_window_changed ),
 };
 
 static struct interface_descriptor oncrpc_intf_desc =
@@ -79,10 +87,10 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 	reply.accept_state = oncrpc_iob_get_int ( io_buf );
 	reply.data         = io_buf;
 
-	struct oncrpc_pending *p;
-	struct oncrpc_pending *tmp;
+	struct oncrpc_pending_reply *p;
+	struct oncrpc_pending_reply *tmp;
 
-	list_for_each_entry_safe ( p, tmp, &session->pending->list, list ) {
+	list_for_each_entry_safe ( p, tmp, &session->pending_reply, list ) {
 		if ( reply.rpc_id != p->rpc_id )
 			continue;
 
@@ -98,6 +106,22 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 
 }
 
+static void oncrpc_window_changed ( struct oncrpc_session *session ) {
+	if ( ! xfer_window ( &session->intf ) )
+		return;
+
+	struct oncrpc_pending_call *p;
+	struct oncrpc_pending_call *tmp;
+
+	list_for_each_entry_safe ( p, tmp, &session->pending_call, list ) {
+		if ( ( xfer_deliver_iob ( &session->intf, p->data ) ) != 0 )
+			continue;
+
+		list_del ( &p->list );
+		free ( p );
+	}
+}
+
 void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,
@@ -110,6 +134,8 @@ void oncrpc_init_session ( struct oncrpc_session *session,
 	session->prog_name  = prog_name;
 	session->prog_vers  = prog_vers;
 
+	INIT_LIST_HEAD ( &session->pending_call );
+	INIT_LIST_HEAD ( &session->pending_reply );
 	intf_init ( &session->intf, &oncrpc_intf_desc, NULL );
 }
 
@@ -117,12 +143,21 @@ void oncrpc_close_session ( struct oncrpc_session *session, int rc ) {
 	if ( ! session )
 		return;
 
-	struct oncrpc_pending *p;
-	struct oncrpc_pending *tmp;
+	struct oncrpc_pending_reply *pr;
+	struct oncrpc_pending_reply *tr;
 
-	list_for_each_entry_safe ( p, tmp, &session->pending->list, list ) {
-		list_del ( &p->list );
-		free ( p );
+	list_for_each_entry_safe ( pr, tr, &session->pending_reply, list ) {
+		list_del ( &pr->list );
+		//free ( pr );
+	}
+
+	struct oncrpc_pending_call *pc;
+	struct oncrpc_pending_call *tc;
+
+	list_for_each_entry_safe ( pc, tc, &session->pending_call, list ) {
+		free ( pc->data );
+		list_del ( &pc->list );
+		free ( pc );
 	}
 
 	intf_shutdown ( &session->intf, rc );
@@ -200,7 +235,8 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	int rc;
 	uint32_t frame_size = 0;
 	struct io_buffer *call_buf;
-	struct oncrpc_pending *pending;
+	struct oncrpc_pending_reply *pending_reply;
+	struct oncrpc_pending_call *pending_call;
 
 	call_buf = alloc_iob ( ONCRPC_HEADER_SIZE + iob_len ( io_buf ) +
 	                       session->credential->length +
@@ -209,7 +245,8 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	if ( ! call_buf )
 		return -ENOBUFS;
 
-	if ( ! ( pending = malloc ( sizeof ( struct oncrpc_pending ) ) ) ) {
+	pending_reply = malloc ( sizeof ( struct oncrpc_pending_reply ) );
+	if ( ! ( pending_reply ) ) {
 		free_iob ( call_buf );
 		return -ENOBUFS;
 	}
@@ -233,16 +270,32 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	memcpy ( call_buf->tail, io_buf->data, iob_len (io_buf));
 	iob_put ( call_buf, iob_len (io_buf) );
 
-	if ( ( rc = xfer_deliver_iob ( &session->intf, call_buf ) ) != 0 )
-	{
-		free_iob ( call_buf );
-		free ( pending );
+	if (  ! xfer_window ( &session->intf ) ) {
+		pending_call = malloc ( sizeof ( struct oncrpc_pending_call ) );
+		if ( ! pending_call ) {
+			free ( call_buf );
+			free ( pending_reply );
+			return -ENOBUFS;
+		}
+
+		INIT_LIST_HEAD ( &pending_call->list );
+		pending_call->data = call_buf;
+		list_add ( &pending_call->list, &session->pending_call );
+		rc = 0;
 	} else {
-		pending->rpc_id = session->rpc_id;
-		pending->callback = cb;
-		list_add ( &pending->list, &session->pending->list );
-		free_iob ( io_buf );
+		rc = xfer_deliver_iob ( &session->intf, call_buf );
+		if ( ! rc  ) {
+			free_iob ( call_buf );
+			free ( pending_reply );
+			return rc;
+		}
 	}
+
+	INIT_LIST_HEAD ( &pending_reply->list );
+	pending_reply->callback = cb;
+	pending_reply->rpc_id = session->rpc_id;
+	list_add ( &pending_reply->list, &session->pending_reply );
+	free_iob ( io_buf );
 
 	return rc;
 }

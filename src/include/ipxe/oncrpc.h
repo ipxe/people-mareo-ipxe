@@ -36,7 +36,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 struct oncrpc_cred {
 	uint32_t               flavor;
 	uint32_t               length;
-} __packed;
+};
 
 struct oncrpc_cred_sys {
 	struct oncrpc_cred     credential;
@@ -50,7 +50,8 @@ struct oncrpc_cred_sys {
 
 struct oncrpc_session {
 	struct interface        intf;
-	struct oncrpc_pending   *pending;
+	struct list_head        pending_reply;
+	struct list_head        pending_call;
 	struct oncrpc_cred      *credential;
 	struct oncrpc_cred      *verifier;
 	uint32_t                rpc_id;
@@ -69,11 +70,18 @@ struct oncrpc_reply
 
 typedef int ( *oncrpc_callback_t ) ( struct oncrpc_session *session,
                                      struct oncrpc_reply *reply );
-struct oncrpc_pending {
+struct oncrpc_pending_reply {
 	struct list_head       list;
 	oncrpc_callback_t      callback;
 	uint32_t               rpc_id;
 };
+
+struct oncrpc_pending_call {
+	struct list_head       list;
+	struct io_buffer       *data;
+};
+
+extern struct oncrpc_cred oncrpc_auth_none;
 
 static inline size_t oncrpc_iob_add_val ( struct io_buffer *io_buf,
                                           uint32_t val ) {
@@ -95,7 +103,7 @@ void oncrpc_close_session ( struct oncrpc_session *session, int rc );
 
 size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val ) ;
 size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
-                               const uint32_t *array );
+                                 const uint32_t *array );
 int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
                       struct io_buffer *io_buf, oncrpc_callback_t cb );
 
