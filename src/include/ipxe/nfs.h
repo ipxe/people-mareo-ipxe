@@ -1,5 +1,5 @@
-#ifndef _IPXE_FTP_H
-#define _IPXE_FTP_H
+#ifndef _IPXE_NFS_H
+#define _IPXE_NFS_H
 
 /** @file
  *
@@ -19,4 +19,4 @@ FILE_LICENCE ( GPL2_OR_LATER );
 
 #define MOUNT_VERS 3
 
-#endif /* _IPXE_FTP_H */
+#endif /* _IPXE_NFS_H */

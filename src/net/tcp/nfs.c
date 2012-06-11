@@ -33,6 +33,7 @@
 #include <ipxe/uri.h>
 #include <ipxe/features.h>
 #include <ipxe/nfs.h>
+#include <ipxe/oncrpc.h>
 #include <ipxe/portmap.h>
 
 /** @file
@@ -200,7 +201,8 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	intf_init ( &nfs->xfer, &nfs_xfer_desc, &nfs->refcnt );
 	nfs->uri = uri_get ( uri );
 
-	portmap_init_session ( &nfs->pm_session );
+	portmap_init_session ( &nfs->pm_session, uri_port ( uri, 0 ),
+	                       uri->host );
 	oncrpc_init_session ( &nfs->nfs_session, &oncrpc_auth_none,
 	                      &oncrpc_auth_none, ONCRPC_NFS, NFS_VERS );
 

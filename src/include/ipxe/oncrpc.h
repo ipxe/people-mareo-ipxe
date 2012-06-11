@@ -2,8 +2,8 @@
 #define _IPXE_ONCRPC_H
 
 #include <stdint.h>
-#include <ipxe/interface.h>
 #include <ipxe/iobuf.h>
+#include <ipxe/refcnt.h>
 
 /** @file
  *
@@ -22,17 +22,6 @@ FILE_LICENCE ( GPL2_OR_LATER );
 /** ONC RPC System Authentication (also called UNIX Authentication) */
 #define ONCRPC_AUTH_SYS 1
 
-#define oncrpc_iob_add_int( buf, val ) oncrpc_iob_add_val ( (buf), \
-                                                            htonl ( val ) )
-
-#define oncrpc_iob_get_int( buf ) \
-( { \
-	uint32_t val; \
-	oncrpc_iob_get_val ( (buf), &val, sizeof ( val ) ); \
-	ntohl ( val ); \
-} )
-
-
 struct oncrpc_cred {
 	uint32_t               flavor;
 	uint32_t               length;
@@ -49,6 +38,7 @@ struct oncrpc_cred_sys {
 };
 
 struct oncrpc_session {
+	struct refcnt           refcnt;
 	struct interface        intf;
 	struct list_head        pending_reply;
 	struct list_head        pending_call;
@@ -83,9 +73,40 @@ struct oncrpc_pending_call {
 
 extern struct oncrpc_cred oncrpc_auth_none;
 
-static inline size_t oncrpc_iob_add_val ( struct io_buffer *io_buf,
+void oncrpc_init_session ( struct oncrpc_session *session,
+                           struct oncrpc_cred *credential,
+                           struct oncrpc_cred *verifier, uint32_t prog_name,
+                           uint32_t prog_vers );
+int oncrpc_connect_named (struct oncrpc_session *session, uint16_t port,
+                          const char *name );
+void oncrpc_close_session ( struct oncrpc_session *session, int rc );
+
+int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
+                      struct io_buffer *io_buf, oncrpc_callback_t cb );
+
+
+#define oncrpc_iob_get_int( buf ) \
+( { \
+	uint32_t val; \
+	oncrpc_iob_get_val ( (buf), &val, sizeof ( val ) ); \
+	ntohl ( val ); \
+} )
+
+struct io_buffer * oncrpc_alloc_iob ( const struct oncrpc_session *session,
+                                      size_t len );
+
+size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val );
+
+size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
+                                 const uint32_t *array );
+size_t oncrpc_iob_add_cred ( struct io_buffer *io_buf,
+                             struct oncrpc_cred *cred );
+size_t oncrpc_iob_get_cred ( struct io_buffer *io_buf,
+                             struct oncrpc_cred *cred );
+
+static inline size_t oncrpc_iob_add_int ( struct io_buffer *io_buf,
                                           uint32_t val ) {
-	memcpy ( iob_put ( io_buf, sizeof ( val ) ), &val, sizeof ( val ) );
+	* ( uint32_t * ) iob_put ( io_buf, sizeof ( val ) ) = htonl ( val );
 	return ( sizeof ( val) );
 }
 
@@ -95,16 +116,5 @@ static inline size_t oncrpc_iob_get_val ( struct io_buffer *io_buf,
 	return size;
 }
 
-void oncrpc_init_session ( struct oncrpc_session *session,
-                           struct oncrpc_cred *credential,
-                           struct oncrpc_cred *verifier, uint32_t prog_name,
-                           uint32_t prog_vers );
-void oncrpc_close_session ( struct oncrpc_session *session, int rc );
-
-size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val ) ;
-size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
-                                 const uint32_t *array );
-int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
-                      struct io_buffer *io_buf, oncrpc_callback_t cb );
 
 #endif /* _IPXE_ONCRPC_H */
