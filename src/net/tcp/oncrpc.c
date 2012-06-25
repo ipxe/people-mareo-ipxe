@@ -133,6 +133,19 @@ static void oncrpc_window_changed ( struct oncrpc_session *session ) {
 	}
 }
 
+void oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys, uint32_t uid,
+                            uint32_t gid, char *hostname ) {
+	auth_sys->hostname    = hostname;
+	auth_sys->uid         = uid;
+	auth_sys->gid         = gid;
+	auth_sys->aux_gid_len = 0;
+	auth_sys->stamp       = 0;
+
+	auth_sys->credential.flavor = ONCRPC_AUTH_SYS;
+	auth_sys->credential.length = 16 + oncrpc_strlen ( hostname );
+
+}
+
 void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,
@@ -276,6 +289,17 @@ struct io_buffer *oncrpc_alloc_iob ( const struct oncrpc_session *session,
 
 	iob_reserve ( io_buf, header_size );
 	return io_buf;
+}
+
+size_t oncrpc_strlen ( const char *str )
+{
+	size_t len;
+
+	len = sizeof ( uint32_t ) + strlen ( str );
+	while ( len % 4 )
+		++len;
+
+	return len;
 }
 
 size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val ) {

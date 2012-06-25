@@ -85,6 +85,8 @@ struct nfs_request {
 
 static int nfs_mount ( struct nfs_request *nfs, const char *mountpoint );
 static int nfs_umount ( struct nfs_request *nfs, const char *mountpoint );
+static int getport_nfs_cb ( struct oncrpc_session *session,
+                            struct oncrpc_reply *reply);
 
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
 	fh->size = oncrpc_iob_get_int ( io_buf );
@@ -124,8 +126,7 @@ static void nfs_done ( struct nfs_request *nfs, int rc ) {
 	// oncrpc_close_session ( &nfs->mount_session, rc );
 	intf_shutdown ( &nfs->xfer, rc );
 }
-static int getport_nfs_cb ( struct oncrpc_session *session,
-                            struct oncrpc_reply *reply);
+
 static int getport_mount_cb ( struct oncrpc_session *session,
                               struct oncrpc_reply *reply) {
 	struct nfs_request *nfs =
@@ -143,13 +144,25 @@ static int getport_mount_cb ( struct oncrpc_session *session,
 
 	rc = oncrpc_connect_named ( &nfs->mount_session, nfs->mount_port,
 	                            nfs->uri->host );
-
-	if ( rc != 0 )
+	if ( rc != 0 ) {
 		nfs_done ( nfs, rc );
-	else
-		nfs_mount ( nfs, nfs->mountpoint );
+		return rc;
+	}
 
-	return rc;
+	rc = portmap_getport ( &nfs->pm_session, ONCRPC_NFS, NFS_VERS,
+	                       PORTMAP_PROT_TCP, &getport_nfs_cb );
+	if ( rc != 0 ) {
+		nfs_done ( nfs, rc );
+		return rc;
+	}
+
+	rc = nfs_mount ( nfs, nfs->mountpoint );
+	if ( rc != 0 ) {
+		nfs_done ( nfs, rc );
+		return rc;
+	}
+
+	return 0;
 }
 
 static int getport_nfs_cb ( struct oncrpc_session *session,
@@ -182,25 +195,25 @@ static int mount_cb ( struct oncrpc_session *session,
                       struct oncrpc_reply *reply) {
 	int rc;
 	struct nfs_request *nfs =
-		container_of ( session, struct nfs_request, pm_session );
+		container_of ( session, struct nfs_request, mount_session );
 
 	switch ( oncrpc_iob_get_int ( reply->data ) )
 	{
-		case 0:
-			rc = 0;
-			break;
-		case 1:
-			rc = -EPERM;
-			break;
-		case 2:
-			rc = -ENOENT;
-			break;
-		case 13:
-			rc = -EACCES;
-			break;
-		default:
-			rc = -ENOTSUP;
-			break;
+	case 0:
+		rc = 0;
+		break;
+	case 1:
+		rc = -EPERM;
+		break;
+	case 2:
+		rc = -ENOENT;
+		break;
+	case 13:
+		rc = -EACCES;
+		break;
+	default:
+		rc = -ENOTSUP;
+		break;
 	}
 
 	if ( rc != 0 ) {
@@ -210,13 +223,6 @@ static int mount_cb ( struct oncrpc_session *session,
 
         nfs_iob_get_fh ( reply->data, &nfs->root_fh );
 
-	if ( ( nfs->nfs_port = uri_port ( nfs->uri, 0 ) ) == 0 )
-		rc = portmap_getport ( &nfs->pm_session, ONCRPC_NFS, NFS_VERS,
-		                       PORTMAP_PROT_TCP, &getport_nfs_cb );
-	else
-		rc = oncrpc_connect_named ( &nfs->nfs_session, nfs->nfs_port,
-		                            nfs->uri->host );
-
 	if ( rc != 0 )
 		nfs_done ( nfs, rc );
 	else
@@ -225,54 +231,40 @@ static int mount_cb ( struct oncrpc_session *session,
 	return rc;
 }
 
+static int umnt_cb ( struct oncrpc_session *session,
+                    struct oncrpc_reply *reply __unused) {
+	struct nfs_request *nfs =
+		container_of ( session, struct nfs_request, mount_session );
+
+	nfs_done ( nfs, 0 );
+	return 0;
+}
+
 static int nfs_mount ( struct nfs_request *nfs, const char *mountpoint )
 {
-	int rc;
 	struct io_buffer *io_buf;
 
-
-	/* We allocate 3 more bytes to make sure that any padding will not
-	 * overflow our buffer. */
 	if ( ! ( io_buf = oncrpc_alloc_iob ( &nfs->mount_session,
-	                                     strlen ( mountpoint ) + 3 ) ) )
+	                                     oncrpc_strlen ( mountpoint ) ) ) )
 		return -ENOBUFS;
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
-	rc = oncrpc_call_iob ( &nfs->mount_session, MOUNT_MNT, io_buf,
-	                       &mount_cb );
-
-	if ( rc != 0 )
-	{
-		free_iob ( io_buf );
-		nfs_done ( nfs, rc );
-	}
-
-	return rc;
+	return  oncrpc_call_iob ( &nfs->mount_session, MOUNT_MNT, io_buf,
+	                          &mount_cb );
 }
 
 static int nfs_umount ( struct nfs_request *nfs, const char *mountpoint )
 {
-	int rc;
 	struct io_buffer *io_buf;
 
 
-	/* We allocate 3 more bytes to make sure that any padding will not
-	 * overflow our buffer. */
 	if ( ! ( io_buf = oncrpc_alloc_iob ( &nfs->mount_session,
-	                                     strlen ( mountpoint ) + 3 ) ) )
+	                                     oncrpc_strlen ( mountpoint ) ) ) )
 		return -ENOBUFS;
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
-	rc = oncrpc_call_iob ( &nfs->mount_session, MOUNT_UMNT, io_buf,
-	                       NULL );
-
-	if ( rc != 0 )
-	{
-		free_iob ( io_buf );
-		nfs_done ( nfs, rc );
-	}
-
-	return rc;
+	return oncrpc_call_iob ( &nfs->mount_session, MOUNT_UMNT, io_buf,
+	                         &umnt_cb );
 }
 
 static struct interface_operation nfs_xfer_operations[] = {
@@ -318,7 +310,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	fetch_string_setting_copy ( NULL, &hostname_setting,
 	                            &auth_sys->hostname );
 	if ( auth_sys->hostname == NULL )
-		auth_sys->hostname = strdup ( "(none)" );
+		auth_sys->hostname = strdup ( "iPXE1" );
 
 	if ( auth_sys->hostname == NULL )
 	{
@@ -327,13 +319,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 		return -ENOMEM;
 	}
 
-	auth_sys->stamp       = time_now ();
-	auth_sys->uid         = 0;
-	auth_sys->gid         = 0;
-	auth_sys->aux_gid_len = 0;
-
-	auth_sys->credential.flavor = ONCRPC_AUTH_SYS;
-	auth_sys->credential.length = 16 + 8 + 4;
+	oncrpc_init_cred_sys ( auth_sys, 0, 0, auth_sys->hostname );
 
 	nfs->mountpoint = strdup ( uri->path );
 	if ( ! nfs->mountpoint )

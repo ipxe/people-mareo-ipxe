@@ -73,6 +73,8 @@ struct oncrpc_pending_call {
 
 extern struct oncrpc_cred oncrpc_auth_none;
 
+void oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys, uint32_t uid,
+                            uint32_t gid, char *hostname );
 void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,
@@ -95,6 +97,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 struct io_buffer * oncrpc_alloc_iob ( const struct oncrpc_session *session,
                                       size_t len );
 
+size_t oncrpc_strlen ( const char *str );
 size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val );
 
 size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
