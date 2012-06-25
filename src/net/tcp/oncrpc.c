@@ -59,8 +59,8 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 static void oncrpc_window_changed ( struct oncrpc_session *session );
 
 static struct interface_operation oncrpc_intf_operations[] = {
-	INTF_OP ( xfer_deliver, struct oncrpc_session *, oncrpc_deliver ),
 	INTF_OP ( intf_close, struct oncrpc_session *, oncrpc_close_session ),
+	INTF_OP ( xfer_deliver, struct oncrpc_session *, oncrpc_deliver ),
 	INTF_OP ( xfer_window_changed, struct oncrpc_session *,
 	          oncrpc_window_changed ),
 };
@@ -72,18 +72,30 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
                             struct io_buffer *io_buf,
                             struct xfer_metadata *meta __unused ) {
 
+	DBGC ( session, "ONCRPC %p Got frame (len=%d)\n", session,
+	       (unsigned int) iob_len ( io_buf ) );
+
 	struct oncrpc_reply      reply;
+	struct oncrpc_cred       verifier;
 	oncrpc_callback_t        callback = NULL;
-	uint64_t                 fragment_size;
+	uint32_t                 fragment_size;
 
 	fragment_size      = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
-
 	reply.rpc_id       = oncrpc_iob_get_int ( io_buf );
 
 	if ( oncrpc_iob_get_int ( io_buf ) != ONCRPC_REPLY )
 		return -ENOTSUP;
 
 	reply.reply_state  = oncrpc_iob_get_int ( io_buf );
+
+	if ( reply.reply_state == 0 )
+	{
+		verifier.flavor = oncrpc_iob_get_int ( io_buf );
+		verifier.length = oncrpc_iob_get_int ( io_buf );
+		reply.verifier  = &verifier;
+		iob_pull ( io_buf, verifier.length );
+	}
+
 	reply.accept_state = oncrpc_iob_get_int ( io_buf );
 	reply.data         = io_buf;
 
@@ -102,8 +114,7 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 	if ( callback == NULL )
 		return 0;
 
-	return callback ( session, &reply );
-
+	return  callback ( session, &reply );
 }
 
 static void oncrpc_window_changed ( struct oncrpc_session *session ) {
@@ -129,6 +140,7 @@ void oncrpc_init_session ( struct oncrpc_session *session,
 	if ( ! session )
 		return;
 
+	session->rpc_id     = rand();
 	session->credential = credential;
 	session->verifier   = verifier;
 	session->prog_name  = prog_name;
@@ -146,12 +158,16 @@ int oncrpc_connect_named ( struct oncrpc_session *session, uint16_t port,
 		return -EINVAL;
 
 	struct sockaddr_tcpip peer;
+	struct sockaddr_tcpip local;
+
 	memset ( &peer, 0, sizeof ( peer ) );
+	memset ( &peer, 0, sizeof ( local ) );
 	peer.st_port = htons ( port );
+	local.st_port = htons ( rand() % 1024 );
 
 	return xfer_open_named_socket ( &session->intf, SOCK_STREAM,
 	                                ( struct sockaddr * ) &peer, name,
-                                        NULL );
+                                        ( struct sockaddr * ) &local );
 }
 
 void oncrpc_close_session ( struct oncrpc_session *session, int rc ) {
@@ -183,14 +199,14 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	if ( ! session )
 		return -EINVAL;
 
-	int rc;
+	if ( ! io_buf )
+		return -EINVAL;
+
+	int rc = 0;
 	void *tail;
 	size_t header_size, frame_size;
 	struct oncrpc_pending_reply *pending_reply;
 	struct oncrpc_pending_call *pending_call;
-
-	if ( ! io_buf )
-		return -EINVAL;
 
 	header_size = ONCRPC_HEADER_SIZE + session->credential->length +
 	              session->verifier->length;
@@ -199,7 +215,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 		return -EINVAL;
 
 	pending_reply = malloc ( sizeof ( struct oncrpc_pending_reply ) );
-	if ( ! ( pending_reply ) )
+	if ( ! pending_reply )
 		return -ENOBUFS;
 
 	frame_size = iob_len ( io_buf ) + header_size - sizeof ( uint32_t );
@@ -207,7 +223,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	tail = io_buf->tail;
 	io_buf->tail = iob_push ( io_buf, header_size );
 	oncrpc_iob_add_int ( io_buf, SET_LAST_FRAME ( frame_size ) );
-	oncrpc_iob_add_int ( io_buf, session->rpc_id++ );
+	oncrpc_iob_add_int ( io_buf, ++session->rpc_id );
 	oncrpc_iob_add_int ( io_buf, ONCRPC_CALL );
 	oncrpc_iob_add_int ( io_buf, ONCRPC_VERS );
 	oncrpc_iob_add_int ( io_buf, session->prog_name );
@@ -217,7 +233,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	oncrpc_iob_add_cred ( io_buf, session->verifier );
 	io_buf->tail = tail;
 
-	if (  ! xfer_window ( &session->intf ) ) {
+	if ( xfer_window ( &session->intf ) < iob_len ( io_buf ) ) {
 		pending_call = malloc ( sizeof ( struct oncrpc_pending_call ) );
 		if ( ! pending_call ) {
 			free ( pending_reply );
@@ -234,8 +250,6 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 			free ( pending_reply );
 			return rc;
 		}
-
-		free_iob ( io_buf );
 	}
 
 	INIT_LIST_HEAD ( &pending_reply->list );

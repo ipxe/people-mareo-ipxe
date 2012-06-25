@@ -87,9 +87,9 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 
 #define oncrpc_iob_get_int( buf ) \
 ( { \
-	uint32_t val; \
-	oncrpc_iob_get_val ( (buf), &val, sizeof ( val ) ); \
-	ntohl ( val ); \
+	uint32_t _val; \
+	oncrpc_iob_get_val ( (buf), &_val, sizeof ( _val ) ); \
+	ntohl ( _val ); \
 } )
 
 struct io_buffer * oncrpc_alloc_iob ( const struct oncrpc_session *session,
@@ -112,7 +112,8 @@ static inline size_t oncrpc_iob_add_int ( struct io_buffer *io_buf,
 
 static inline size_t oncrpc_iob_get_val ( struct io_buffer *io_buf,
                                           void *val, size_t size ) {
-	memcpy ( iob_pull ( io_buf, size ), val, size );
+	memcpy (val, io_buf->data, size );
+	iob_pull ( io_buf, size );
 	return size;
 }
 
