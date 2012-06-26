@@ -32,6 +32,7 @@
 #include <ipxe/uri.h>
 #include <ipxe/features.h>
 #include <ipxe/oncrpc.h>
+#include <ipxe/oncrpc_iob.h>
 
 /** @file
  *
@@ -118,14 +119,16 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 }
 
 static void oncrpc_window_changed ( struct oncrpc_session *session ) {
-	if ( ! xfer_window ( &session->intf ) )
-		return;
-
+	int rc;
 	struct oncrpc_pending_call *p;
 	struct oncrpc_pending_call *tmp;
 
 	list_for_each_entry_safe ( p, tmp, &session->pending_call, list ) {
-		if ( ( xfer_deliver_iob ( &session->intf, p->data ) ) != 0 )
+		if ( xfer_window ( &session->intf ) < iob_len ( p->data ) )
+			continue;
+
+		rc = xfer_deliver_iob ( &session->intf, p->data );
+		if ( rc != 0 )
 			continue;
 
 		list_del ( &p->list );
@@ -259,7 +262,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 		rc = 0;
 	} else {
 		rc = xfer_deliver_iob ( &session->intf, io_buf );
-		if ( ! rc  ) {
+		if ( rc != 0  ) {
 			free ( pending_reply );
 			return rc;
 		}
@@ -271,97 +274,4 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 	list_add ( &pending_reply->list, &session->pending_reply );
 
 	return rc;
-}
-
-struct io_buffer *oncrpc_alloc_iob ( const struct oncrpc_session *session,
-                                     size_t len ) {
-	if ( ! session )
-		return NULL;
-
-	struct io_buffer *io_buf;
-	size_t header_size;
-
-	header_size = ONCRPC_HEADER_SIZE + session->credential->length +
-	              session->verifier->length;
-
-	if ( ! ( io_buf = alloc_iob ( len + header_size ) ) )
-		return NULL;
-
-	iob_reserve ( io_buf, header_size );
-	return io_buf;
-}
-
-size_t oncrpc_strlen ( const char *str )
-{
-	size_t len;
-
-	len = sizeof ( uint32_t ) + strlen ( str );
-	while ( len % 4 )
-		++len;
-
-	return len;
-}
-
-size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val ) {
-	const char *s;
-
-	oncrpc_iob_add_int ( io_buf, strlen ( val ) );
-
-	for ( s = val; *s != '\0'; ++s )
-		* ( char * ) iob_put ( io_buf, sizeof ( *s ) ) = *s;
-
-	while ( ( s++ - val ) % 4 != 0 )
-		* ( char * ) iob_put ( io_buf, sizeof ( *s ) ) = '\0';
-
-	return ( ( s - val ) - 1 + sizeof ( uint32_t ) );
-}
-
-size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
-                                 const uint32_t *array ) {
-	size_t i;
-
-	oncrpc_iob_add_int ( io_buf, size );
-
-	for ( i = 0; i < size; ++i )
-		oncrpc_iob_add_int ( io_buf, array[i] );
-
-	return ( ( size + 1 ) * sizeof ( uint32_t ) );
-}
-
-size_t oncrpc_iob_add_cred ( struct io_buffer *io_buf,
-                             struct oncrpc_cred *cred ) {
-	if ( ! io_buf || ! cred )
-		return 0;
-
-	size_t s = 0;
-
-	s += oncrpc_iob_add_int ( io_buf, cred->flavor );
-	s += oncrpc_iob_add_int ( io_buf, cred->length );
-
-	struct oncrpc_cred_sys *syscred = ( void * ) cred;
-	switch ( cred->flavor ) {
-		case ONCRPC_AUTH_NONE:
-			break;
-
-		case ONCRPC_AUTH_SYS:
-			s += oncrpc_iob_add_int ( io_buf, syscred->stamp );
-			s += oncrpc_iob_add_string ( io_buf,
-			                             syscred->hostname );
-			s += oncrpc_iob_add_int ( io_buf, syscred->uid );
-			s += oncrpc_iob_add_int ( io_buf, syscred->gid );
-			s += oncrpc_iob_add_intarray ( io_buf,
-			                               syscred->aux_gid_len,
-			                               syscred->aux_gid );
-			break;
-	}
-
-	return s;
-}
-
-size_t oncrpc_iob_get_cred ( struct io_buffer *io_buf,
-                             struct oncrpc_cred *cred ) {
-	cred->flavor = oncrpc_iob_get_int ( io_buf );
-	cred->length = oncrpc_iob_get_int ( io_buf );
-
-	return ( 2 * sizeof ( uint32_t ) );
 }

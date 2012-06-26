@@ -33,6 +33,7 @@
 #include <ipxe/features.h>
 #include <ipxe/timer.h>
 #include <ipxe/oncrpc.h>
+#include <ipxe/oncrpc_iob.h>
 #include <ipxe/portmap.h>
 
 /** @file

@@ -35,7 +35,9 @@
 #include <ipxe/features.h>
 #include <ipxe/nfs.h>
 #include <ipxe/oncrpc.h>
+#include <ipxe/oncrpc_iob.h>
 #include <ipxe/portmap.h>
+#include <ipxe/mount.h>
 #include <ipxe/settings.h>
 
 /** @file
@@ -46,8 +48,8 @@
 
 FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
 
-#define MOUNT_MNT 1
-#define MOUNT_UMNT 3
+#define NFS_LOOKUP 3
+#define NFS_READ 6
 
 /**
  * A NFS File handle.
@@ -83,17 +85,22 @@ struct nfs_request {
 	struct uri              *uri;
 };
 
-static int nfs_mount ( struct nfs_request *nfs, const char *mountpoint );
-static int nfs_umount ( struct nfs_request *nfs, const char *mountpoint );
 static int getport_nfs_cb ( struct oncrpc_session *session,
                             struct oncrpc_reply *reply);
 
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
 	fh->size = oncrpc_iob_get_int ( io_buf );
 	oncrpc_iob_get_val ( io_buf, &fh->fh, fh->size );
-	iob_pull ( io_buf, (4 - (fh->size % 4)) % 4 );
 
-	return ( fh->size + (4 - (fh->size % 4)) % 4 );
+	return fh->size + sizeof ( uint32_t );
+}
+
+size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh ) {
+	size_t s = 0;
+	s += oncrpc_iob_add_int ( io_buf, fh->size );
+	s += oncrpc_iob_add_val ( io_buf, &fh->fh, fh->size );
+
+	return s;
 }
 
 /**
@@ -102,8 +109,8 @@ size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
  * @v refcnt		Reference counter
  */
 static void nfs_free ( struct refcnt *refcnt ) {
-	struct nfs_request *nfs =
-		container_of ( refcnt, struct nfs_request, refcnt );
+	struct nfs_request *nfs;
+	nfs = container_of ( refcnt, struct nfs_request, refcnt );
 
 	DBGC ( nfs, "NFS %p freed\n", nfs );
 
@@ -121,81 +128,50 @@ static void nfs_free ( struct refcnt *refcnt ) {
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
 	DBGC ( nfs, "NFS %p completed (%s)\n", nfs, strerror ( rc ) );
 
-	// portmap_close_session ( &nfs->pm_session, rc );
-	// oncrpc_close_session ( &nfs->nfs_session, rc );
-	// oncrpc_close_session ( &nfs->mount_session, rc );
+	portmap_close_session ( &nfs->pm_session, rc );
+	oncrpc_close_session ( &nfs->nfs_session, rc );
+	oncrpc_close_session ( &nfs->mount_session, rc );
 	intf_shutdown ( &nfs->xfer, rc );
 }
 
-static int getport_mount_cb ( struct oncrpc_session *session,
-                              struct oncrpc_reply *reply) {
-	struct nfs_request *nfs =
-		container_of ( session, struct nfs_request, pm_session );
-	int rc = 0;
+int nfs_lookup ( struct oncrpc_session *session, const struct nfs_fh *fh,
+                 const char *filename, oncrpc_callback_t cb ) {
+	struct io_buffer *io_buf;
 
-	if ( reply->accept_state != 0 )
-	{
-		nfs_done ( nfs, -ENOTSUP );
-		return -ENOTSUP;
-	}
+	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( filename ) + 68 );
+	if ( ! io_buf )
+		return -ENOBUFS;
 
-	nfs->mount_port = oncrpc_iob_get_int ( reply->data );
-	DBGC ( nfs, "NFS %p Got mount port (%d)\n", nfs, nfs->mount_port );
+	nfs_iob_add_fh ( io_buf, fh );
+	oncrpc_iob_add_string ( io_buf, filename );
+	return  oncrpc_call_iob ( session, NFS_LOOKUP, io_buf, cb );
+}
 
-	rc = oncrpc_connect_named ( &nfs->mount_session, nfs->mount_port,
-	                            nfs->uri->host );
-	if ( rc != 0 ) {
-		nfs_done ( nfs, rc );
-		return rc;
-	}
+static int lookup_cb ( struct oncrpc_session *session,
+                       struct oncrpc_reply *reply) {
+	struct nfs_fh fh;
+	struct nfs_request *nfs;
+	nfs = container_of ( session, struct nfs_request, pm_session );
 
-	rc = portmap_getport ( &nfs->pm_session, ONCRPC_NFS, NFS_VERS,
-	                       PORTMAP_PROT_TCP, &getport_nfs_cb );
-	if ( rc != 0 ) {
-		nfs_done ( nfs, rc );
-		return rc;
-	}
-
-	rc = nfs_mount ( nfs, nfs->mountpoint );
-	if ( rc != 0 ) {
-		nfs_done ( nfs, rc );
-		return rc;
-	}
+        nfs_iob_get_fh ( reply->data, &fh );
 
 	return 0;
 }
 
-static int getport_nfs_cb ( struct oncrpc_session *session,
-                            struct oncrpc_reply *reply) {
-	struct nfs_request *nfs =
-		container_of ( session, struct nfs_request, pm_session );
-	int rc = 0;
+static int umnt_cb ( struct oncrpc_session *session,
+                    struct oncrpc_reply *reply __unused) {
+	struct nfs_request *nfs;
+	nfs = container_of ( session, struct nfs_request, mount_session );
 
-	if ( reply->accept_state != 0 )
-	{
-		DBGC ( nfs, "NFS %p GETPORT failed (%d)\n", nfs,
-		       reply->accept_state );
-		nfs_done ( nfs, -ENOTSUP );
-		return -ENOTSUP;
-	}
-
-	nfs->nfs_port = oncrpc_iob_get_int ( reply->data );
-	DBGC ( nfs, "NFS %p Got NFS port (%d)\n", nfs, nfs->nfs_port );
-
-	rc = oncrpc_connect_named ( &nfs->nfs_session, nfs->nfs_port,
-	                            nfs->uri->host );
-
-	if ( rc != 0 )
-		nfs_done ( nfs, rc );
-
-	return rc;
+	nfs_done ( nfs, 0 );
+	return 0;
 }
 
-static int mount_cb ( struct oncrpc_session *session,
+static int mnt_cb ( struct oncrpc_session *session,
                       struct oncrpc_reply *reply) {
 	int rc;
-	struct nfs_request *nfs =
-		container_of ( session, struct nfs_request, mount_session );
+	struct nfs_request *nfs;
+	nfs = container_of ( session, struct nfs_request, mount_session );
 
 	switch ( oncrpc_iob_get_int ( reply->data ) )
 	{
@@ -222,49 +198,79 @@ static int mount_cb ( struct oncrpc_session *session,
 	}
 
         nfs_iob_get_fh ( reply->data, &nfs->root_fh );
-
+	rc = nfs_lookup ( &nfs->nfs_session, &nfs->root_fh, nfs->filename,
+                          lookup_cb );
 	if ( rc != 0 )
 		nfs_done ( nfs, rc );
-	else
-		nfs_umount ( nfs, nfs->mountpoint );
 
 	return rc;
 }
 
-static int umnt_cb ( struct oncrpc_session *session,
-                    struct oncrpc_reply *reply __unused) {
-	struct nfs_request *nfs =
-		container_of ( session, struct nfs_request, mount_session );
+static int getport_mount_cb ( struct oncrpc_session *session,
+                              struct oncrpc_reply *reply) {
+	int rc;
+	struct nfs_request *nfs;
+	nfs = container_of ( session, struct nfs_request, pm_session );
 
-	nfs_done ( nfs, 0 );
+	if ( reply->accept_state != 0 )
+	{
+		nfs_done ( nfs, -ENOTSUP );
+		return -ENOTSUP;
+	}
+
+	nfs->mount_port = oncrpc_iob_get_int ( reply->data );
+	DBGC ( nfs, "NFS %p Got MOUNT port (%d)\n", nfs, nfs->mount_port );
+
+	rc = oncrpc_connect_named ( &nfs->mount_session, nfs->mount_port,
+	                            nfs->uri->host );
+	if ( rc != 0 ) {
+		nfs_done ( nfs, rc );
+		return rc;
+	}
+
+	rc = portmap_getport ( &nfs->pm_session, ONCRPC_NFS, NFS_VERS,
+	                       PORTMAP_PROT_TCP, &getport_nfs_cb );
+	if ( rc != 0 ) {
+		nfs_done ( nfs, rc );
+		return rc;
+	}
+
+	rc = mount_mnt ( &nfs->mount_session, nfs->mountpoint, mnt_cb );
+	if ( rc != 0 ) {
+		nfs_done ( nfs, rc );
+		return rc;
+	}
+
 	return 0;
 }
 
-static int nfs_mount ( struct nfs_request *nfs, const char *mountpoint )
-{
-	struct io_buffer *io_buf;
+static int getport_nfs_cb ( struct oncrpc_session *session,
+                            struct oncrpc_reply *reply) {
+	int rc = 0;
+	struct nfs_request *nfs;
+	nfs = container_of ( session, struct nfs_request, pm_session );
 
-	if ( ! ( io_buf = oncrpc_alloc_iob ( &nfs->mount_session,
-	                                     oncrpc_strlen ( mountpoint ) ) ) )
-		return -ENOBUFS;
+	if ( reply->accept_state != 0 )
+	{
+		DBGC ( nfs, "NFS %p GETPORT failed (%d)\n", nfs,
+		       reply->accept_state );
+		nfs_done ( nfs, -ENOTSUP );
+		return -ENOTSUP;
+	}
 
-	oncrpc_iob_add_string ( io_buf, mountpoint );
-	return  oncrpc_call_iob ( &nfs->mount_session, MOUNT_MNT, io_buf,
-	                          &mount_cb );
-}
+	nfs->nfs_port = oncrpc_iob_get_int ( reply->data );
+	DBGC ( nfs, "NFS %p Got NFS port (%d)\n", nfs, nfs->nfs_port );
 
-static int nfs_umount ( struct nfs_request *nfs, const char *mountpoint )
-{
-	struct io_buffer *io_buf;
+	rc = oncrpc_connect_named ( &nfs->nfs_session, nfs->nfs_port,
+	                            nfs->uri->host );
+	if ( rc != 0 )
+	{
+		nfs_done ( nfs, rc );
+		return rc;
+	}
 
 
-	if ( ! ( io_buf = oncrpc_alloc_iob ( &nfs->mount_session,
-	                                     oncrpc_strlen ( mountpoint ) ) ) )
-		return -ENOBUFS;
-
-	oncrpc_iob_add_string ( io_buf, mountpoint );
-	return oncrpc_call_iob ( &nfs->mount_session, MOUNT_UMNT, io_buf,
-	                         &umnt_cb );
+	return rc;
 }
 
 static struct interface_operation nfs_xfer_operations[] = {
@@ -310,7 +316,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	fetch_string_setting_copy ( NULL, &hostname_setting,
 	                            &auth_sys->hostname );
 	if ( auth_sys->hostname == NULL )
-		auth_sys->hostname = strdup ( "iPXE1" );
+		auth_sys->hostname = strdup ( "iPXE" );
 
 	if ( auth_sys->hostname == NULL )
 	{
@@ -337,7 +343,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	                       uri->host );
 	oncrpc_init_session ( &nfs->mount_session, &auth_sys->credential,
 	                      &oncrpc_auth_none, ONCRPC_MOUNT, MOUNT_VERS );
-	oncrpc_init_session ( &nfs->nfs_session, &oncrpc_auth_none,
+	oncrpc_init_session ( &nfs->nfs_session, &auth_sys->credential,
 	                      &oncrpc_auth_none, ONCRPC_NFS, NFS_VERS );
 
 	nfs->filename   = basename ( nfs->mountpoint );

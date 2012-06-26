@@ -3,7 +3,7 @@
 
 /** @file
  *
- * File transfer protocol
+ * Network File System protocol.
  *
  */
 
@@ -14,9 +14,5 @@ FILE_LICENCE ( GPL2_OR_LATER );
 
 /** NFS protocol version. */
 #define NFS_VERS 3
-
-#define ONCRPC_MOUNT 100005
-
-#define MOUNT_VERS 3
 
 #endif /* _IPXE_NFS_H */
