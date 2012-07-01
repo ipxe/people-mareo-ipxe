@@ -76,12 +76,12 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 	DBGC ( session, "ONCRPC %p Got frame (len=%d)\n", session,
 	       (unsigned int) iob_len ( io_buf ) );
 
+	int                      rc;
 	struct oncrpc_reply      reply;
 	struct oncrpc_cred       verifier;
 	oncrpc_callback_t        callback = NULL;
-	uint32_t                 fragment_size;
 
-	fragment_size      = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
+	reply.frame_size   = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
 	reply.rpc_id       = oncrpc_iob_get_int ( io_buf );
 
 	if ( oncrpc_iob_get_int ( io_buf ) != ONCRPC_REPLY )
@@ -113,9 +113,12 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 	}
 
 	if ( callback == NULL )
-		return 0;
+		rc = 0;
+	else
+		rc = callback ( session, &reply );
 
-	return  callback ( session, &reply );
+	free_iob ( io_buf );
+	return rc;
 }
 
 static void oncrpc_window_changed ( struct oncrpc_session *session ) {
@@ -127,10 +130,8 @@ static void oncrpc_window_changed ( struct oncrpc_session *session ) {
 		if ( xfer_window ( &session->intf ) < iob_len ( p->data ) )
 			continue;
 
-		rc = xfer_deliver_iob ( &session->intf, p->data );
-		if ( rc != 0 )
-			continue;
-
+		rc = xfer_deliver_iob ( &session->intf,
+                                        iob_disown ( p->data ) );
 		list_del ( &p->list );
 		free ( p );
 	}
@@ -261,7 +262,7 @@ int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
 		list_add ( &pending_call->list, &session->pending_call );
 		rc = 0;
 	} else {
-		rc = xfer_deliver_iob ( &session->intf, io_buf );
+		rc = xfer_deliver_iob ( &session->intf, iob_disown ( io_buf ) );
 		if ( rc != 0  ) {
 			free ( pending_reply );
 			return rc;

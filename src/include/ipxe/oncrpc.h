@@ -55,6 +55,7 @@ struct oncrpc_reply
 	uint32_t                rpc_id;
 	uint32_t                reply_state;
 	uint32_t                accept_state;
+	uint32_t                frame_size;
 	struct io_buffer        *data;
 };
 

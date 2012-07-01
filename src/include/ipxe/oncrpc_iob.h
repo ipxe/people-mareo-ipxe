@@ -21,6 +21,13 @@ FILE_LICENCE ( GPL2_OR_LATER );
 	ntohl ( _val ); \
 } )
 
+#define oncrpc_iob_get_int64( buf ) \
+( { \
+	uint64_t _val; \
+	oncrpc_iob_get_val ( (buf), &_val, sizeof ( _val ) ); \
+	ntohll ( _val ); \
+} )
+
 struct io_buffer * oncrpc_alloc_iob ( const struct oncrpc_session *session,
                                       size_t len );
 
@@ -37,6 +44,12 @@ size_t oncrpc_iob_get_cred ( struct io_buffer *io_buf,
 static inline size_t oncrpc_iob_add_int ( struct io_buffer *io_buf,
                                           uint32_t val ) {
 	* ( uint32_t * ) iob_put ( io_buf, sizeof ( val ) ) = htonl ( val );
+	return ( sizeof ( val) );
+}
+
+static inline size_t oncrpc_iob_add_int64 ( struct io_buffer *io_buf,
+                                            uint64_t val ) {
+	* ( uint64_t * ) iob_put ( io_buf, sizeof ( val ) ) = htonll ( val );
 	return ( sizeof ( val) );
 }
 

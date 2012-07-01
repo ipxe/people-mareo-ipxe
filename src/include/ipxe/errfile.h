@@ -209,7 +209,8 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define ERRFILE_oncrpc			( ERRFILE_NET | 0x00310000 )
 #define ERRFILE_portmap			( ERRFILE_NET | 0x00320000 )
 #define ERRFILE_nfs			( ERRFILE_NET | 0x00330000 )
-#define ERRFILE_mount			( ERRFILE_NET | 0x00340000 )
+#define ERRFILE_nfs_open		( ERRFILE_NET | 0x00330000 )
+#define ERRFILE_mount			( ERRFILE_NET | 0x00350000 )
 
 #define ERRFILE_image		      ( ERRFILE_IMAGE | 0x00000000 )
 #define ERRFILE_elf		      ( ERRFILE_IMAGE | 0x00010000 )

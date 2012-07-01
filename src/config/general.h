@@ -55,9 +55,10 @@ FILE_LICENCE ( GPL2_OR_LATER );
  */
 
 #define	DOWNLOAD_PROTO_TFTP	/* Trivial File Transfer Protocol */
-#define	DOWNLOAD_PROTO_HTTP	/* Hypertext Transfer Protocol */
+#undef	DOWNLOAD_PROTO_HTTP	/* Hypertext Transfer Protocol */
 #undef	DOWNLOAD_PROTO_HTTPS	/* Secure Hypertext Transfer Protocol */
-#define	DOWNLOAD_PROTO_FTP	/* File Transfer Protocol */
+#undef	DOWNLOAD_PROTO_FTP	/* File Transfer Protocol */
+#define	DOWNLOAD_PROTO_NFS	/* Network File System Protocol */
 #define	DOWNLOAD_PROTO_NFS	/* Network File System Protocol */
 #undef	DOWNLOAD_PROTO_SLAM	/* Scalable Local Area Multicast */
 
@@ -66,18 +67,18 @@ FILE_LICENCE ( GPL2_OR_LATER );
  *
  */
 
-//#undef	SANBOOT_PROTO_ISCSI	/* iSCSI protocol */
-//#undef	SANBOOT_PROTO_AOE	/* AoE protocol */
-//#undef	SANBOOT_PROTO_IB_SRP	/* Infiniband SCSI RDMA protocol */
-//#undef	SANBOOT_PROTO_FCP	/* Fibre Channel protocol */
+#undef	SANBOOT_PROTO_ISCSI	/* iSCSI protocol */
+#undef	SANBOOT_PROTO_AOE	/* AoE protocol */
+#undef	SANBOOT_PROTO_IB_SRP	/* Infiniband SCSI RDMA protocol */
+#undef	SANBOOT_PROTO_FCP	/* Fibre Channel protocol */
 
 /*
  * 802.11 cryptosystems and handshaking protocols
  *
  */
-#define	CRYPTO_80211_WEP	/* WEP encryption (deprecated and insecure!) */
-#define	CRYPTO_80211_WPA	/* WPA Personal, authenticating with passphrase */
-#define	CRYPTO_80211_WPA2	/* Add support for stronger WPA cryptography */
+#undef	CRYPTO_80211_WEP	/* WEP encryption (deprecated and insecure!) */
+#undef	CRYPTO_80211_WPA	/* WPA Personal, authenticating with passphrase */
+#undef	CRYPTO_80211_WPA2	/* Add support for stronger WPA cryptography */
 
 /*
  * Name resolution modules

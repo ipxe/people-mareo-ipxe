@@ -126,7 +126,7 @@ REQUIRE_OBJECT ( https );
 REQUIRE_OBJECT ( ftp );
 #endif
 #ifdef DOWNLOAD_PROTO_NFS
-REQUIRE_OBJECT ( nfs );
+REQUIRE_OBJECT ( nfs_open );
 #endif
 #ifdef DOWNLOAD_PROTO_SLAM
 REQUIRE_OBJECT ( slam );
