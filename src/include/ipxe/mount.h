@@ -1,6 +1,8 @@
 #ifndef _IPXE_MOUNT_H
 #define _IPXE_MOUNT_H
 
+#include <ipxe/nfs.h>
+
 /** @file
  *
  * NFS MOUNT protocol.
@@ -36,6 +38,13 @@ FILE_LICENCE ( GPL2_OR_LATER );
 /** A failure on the server. */
 #define MNT3ERR_SERVERFAULT     10006
 
+struct mount_mnt_reply {
+	uint32_t        status;
+	struct nfs_fh   fh;
+};
+
+int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
+                          struct oncrpc_reply *reply );
 
 int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
                 oncrpc_callback_t cb);

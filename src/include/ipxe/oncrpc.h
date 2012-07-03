@@ -2,6 +2,7 @@
 #define _IPXE_ONCRPC_H
 
 #include <stdint.h>
+#include <ipxe/interface.h>
 #include <ipxe/iobuf.h>
 #include <ipxe/refcnt.h>
 

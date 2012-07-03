@@ -25,17 +25,13 @@
 #include <libgen.h>
 #include <byteswap.h>
 #include <ipxe/time.h>
-#include <ipxe/socket.h>
-#include <ipxe/tcpip.h>
-#include <ipxe/in.h>
 #include <ipxe/iobuf.h>
-#include <ipxe/xfer.h>
 #include <ipxe/open.h>
-#include <ipxe/uri.h>
 #include <ipxe/features.h>
 #include <ipxe/oncrpc.h>
 #include <ipxe/oncrpc_iob.h>
 #include <ipxe/nfs.h>
+#include <ipxe/mount.h>
 
 /** @file
  *
@@ -45,6 +41,33 @@
 
 #define MOUNT_MNT 1
 #define MOUNT_UMNT 3
+
+int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
+                          struct oncrpc_reply *reply ) {
+	if (  ! mnt_reply || ! reply )
+		return -EINVAL;
+
+	mnt_reply->status = oncrpc_iob_get_int ( reply->data );
+
+	switch ( mnt_reply->status )
+	{
+	case MNT3_OK:
+		nfs_iob_get_fh ( reply->data, &mnt_reply->fh );
+		return 0;
+	case MNT3ERR_NOENT:
+		return -ENOENT;
+	case MNT3ERR_IO:
+		return -EIO;
+	case MNT3ERR_ACCES:
+		return -EACCES;
+	case MNT3ERR_NOTDIR:
+		return -ENOTDIR;
+	case MNT3ERR_NAMETOOLONG:
+		return -ENAMETOOLONG;
+	default:
+		return -ENOTSUP;
+	}
+}
 
 int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
                 oncrpc_callback_t cb) {

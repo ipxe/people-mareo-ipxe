@@ -25,13 +25,8 @@
 #include <libgen.h>
 #include <byteswap.h>
 #include <ipxe/time.h>
-#include <ipxe/socket.h>
-#include <ipxe/tcpip.h>
-#include <ipxe/in.h>
 #include <ipxe/iobuf.h>
-#include <ipxe/xfer.h>
 #include <ipxe/open.h>
-#include <ipxe/uri.h>
 #include <ipxe/features.h>
 #include <ipxe/nfs.h>
 #include <ipxe/oncrpc.h>
@@ -92,4 +87,35 @@ int nfs_read ( struct oncrpc_session *session, const struct nfs_fh *fh,
 	oncrpc_iob_add_int ( io_buf, count );
 
 	return oncrpc_call_iob ( session, NFS_READ, io_buf, cb );
+}
+
+int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
+                           struct oncrpc_reply *reply ) {
+	if ( ! lookup_reply || ! reply )
+		return -EINVAL;
+
+	lookup_reply->status = oncrpc_iob_get_int ( reply->data );
+	switch ( lookup_reply->status )
+	{
+	case NFS3_OK:
+		nfs_iob_get_fh ( reply->data, &lookup_reply->fh );
+		return 0;
+	case NFS3ERR_PERM:
+		return -EPERM;
+	case NFS3ERR_NOENT:
+		return -ENOENT;
+	case NFS3ERR_IO:
+		return -EIO;
+	case NFS3ERR_ACCES:
+		return -EACCES;
+	case NFS3ERR_NOTDIR:
+		return -ENOTDIR;
+	case NFS3ERR_NAMETOOLONG:
+		return -ENAMETOOLONG;
+	case NFS3ERR_STALE:
+	case NFS3ERR_BADHANDLE:
+	case NFS3ERR_SERVERFAULT:
+	default:
+		return -ENOTSUP;
+	}
 }

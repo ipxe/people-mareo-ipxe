@@ -71,7 +71,6 @@ struct nfs_request {
 
 	char *                  mountpoint;
 	char *                  filename;
-	struct nfs_fh           root_fh;
 	struct nfs_fh           file_fh;
 	uint64_t                file_offset;
 
@@ -217,40 +216,17 @@ static int lookup_cb ( struct oncrpc_session *session,
                        struct oncrpc_reply *reply) {
 	int                     rc;
 	struct nfs_request      *nfs;
+	struct nfs_lookup_reply lookup_reply;
 
 	nfs = container_of ( session, struct nfs_request, nfs_session );
 	DBGC ( nfs, "NFS_OPEN %p got LOOKUP reply\n", nfs );
 
-	switch ( oncrpc_iob_get_int ( reply->data ) )
-	{
-	case NFS3_OK:
-		rc = 0;
-		break;
-	case NFS3ERR_PERM:
-		rc = -EPERM;
-		break;
-	case NFS3ERR_NOENT:
-		rc = -ENOENT;
-		break;
-	case NFS3ERR_IO:
-		rc = -EIO;
-		break;
-	case NFS3ERR_NOTDIR:
-		rc = -ENOTDIR;
-		break;
-	case NFS3ERR_NAMETOOLONG:
-		rc = -ENAMETOOLONG;
-		break;
-	default:
-		rc = -ENOTSUP;
-		break;
-	}
-
+	rc = nfs_get_lookup_reply ( &lookup_reply, reply );
 	if ( rc != 0 )
 		goto err;
 
-        nfs_iob_get_fh ( reply->data, &nfs->file_fh );
-	rc = nfs_read ( session, &nfs->file_fh, 0, NFS_RSIZE, read_cb );
+	nfs->file_fh = lookup_reply.fh;
+	rc = nfs_read ( session, &lookup_reply.fh, 0, NFS_RSIZE, read_cb );
 	if ( rc != 0 )
 		goto err;
 
@@ -265,43 +241,16 @@ static int mnt_cb ( struct oncrpc_session *session,
                     struct oncrpc_reply *reply) {
 	int                     rc;
 	struct nfs_request      *nfs;
+	struct mount_mnt_reply  mnt_reply;
 
 	nfs = container_of ( session, struct nfs_request, mount_session );
 	DBGC ( nfs, "NFS_OPEN %p got MNT reply\n", nfs );
 
-	switch ( oncrpc_iob_get_int ( reply->data ) )
-	{
-	case MNT3_OK:
-		rc = 0;
-		break;
-	case MNT3ERR_PERM:
-		rc = -EPERM;
-		break;
-	case MNT3ERR_NOENT:
-		rc = -ENOENT;
-		break;
-	case MNT3ERR_IO:
-		rc = -EIO;
-		break;
-	case MNT3ERR_ACCES:
-		rc = -EACCES;
-		break;
-	case MNT3ERR_NOTDIR:
-		rc = -ENOTDIR;
-		break;
-	case MNT3ERR_NAMETOOLONG:
-		rc = -ENAMETOOLONG;
-		break;
-	default:
-		rc = -ENOTSUP;
-		break;
-	}
-
+	rc = mount_get_mnt_reply ( &mnt_reply, reply );
 	if ( rc != 0 )
 		goto err;
 
-        nfs_iob_get_fh ( reply->data, &nfs->root_fh );
-	rc = nfs_lookup ( &nfs->nfs_session, &nfs->root_fh, nfs->filename,
+	rc = nfs_lookup ( &nfs->nfs_session, &mnt_reply.fh, nfs->filename,
                           lookup_cb );
 	if ( rc != 0 )
 		goto err;

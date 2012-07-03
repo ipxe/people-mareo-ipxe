@@ -57,10 +57,20 @@ struct nfs_fh {
 	size_t                size;
 };
 
+struct nfs_lookup_reply {
+	uint32_t             status;
+	struct nfs_fh        fh;
+};
+
+int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
+                           struct oncrpc_reply *reply );
+
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh );
 size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh );
+
 int nfs_lookup ( struct oncrpc_session *session, const struct nfs_fh *fh,
                  const char *filename, oncrpc_callback_t cb );
 int nfs_read ( struct oncrpc_session *session, const struct nfs_fh *fh,
                uint64_t offset, uint32_t count, oncrpc_callback_t cb );
+
 #endif /* _IPXE_NFS_H */
