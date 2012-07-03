@@ -142,6 +142,21 @@ static int read_cb ( struct oncrpc_session *session,
 	case NFS3_OK:
 		rc = 0;
 		break;
+	case NFS3ERR_PERM:
+		rc = -EPERM;
+		break;
+	case NFS3ERR_NOENT:
+		rc = -ENOENT;
+		break;
+	case NFS3ERR_IO:
+		rc = -EIO;
+		break;
+	case NFS3ERR_ACCES:
+		rc = -EACCES;
+		break;
+	case NFS3ERR_INVAL:
+		rc = -EINVAL;
+		break;
 	default:
 		rc = -ENOTSUP;
 		break;
@@ -211,16 +226,38 @@ static int lookup_cb ( struct oncrpc_session *session,
 	case NFS3_OK:
 		rc = 0;
 		break;
+	case NFS3ERR_PERM:
+		rc = -EPERM;
+		break;
+	case NFS3ERR_NOENT:
+		rc = -ENOENT;
+		break;
+	case NFS3ERR_IO:
+		rc = -EIO;
+		break;
+	case NFS3ERR_NOTDIR:
+		rc = -ENOTDIR;
+		break;
+	case NFS3ERR_NAMETOOLONG:
+		rc = -ENAMETOOLONG;
+		break;
 	default:
 		rc = -ENOTSUP;
 		break;
 	}
 
+	if ( rc != 0 )
+		goto err;
+
         nfs_iob_get_fh ( reply->data, &nfs->file_fh );
 	rc = nfs_read ( session, &nfs->file_fh, 0, NFS_RSIZE, read_cb );
 	if ( rc != 0 )
-		nfs_done ( nfs, rc );
+		goto err;
 
+	return 0;
+
+err:
+	nfs_done ( nfs, rc );
 	return rc;
 }
 

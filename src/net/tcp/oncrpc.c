@@ -72,22 +72,18 @@ static struct interface_descriptor oncrpc_intf_desc =
 static int oncrpc_deliver ( struct oncrpc_session *session,
                             struct io_buffer *io_buf,
                             struct xfer_metadata *meta __unused ) {
-
-	DBGC ( session, "ONCRPC %p Got frame (len=%d)\n", session,
-	       (unsigned int) iob_len ( io_buf ) );
-
 	int                      rc;
 	struct oncrpc_reply      reply;
 	struct oncrpc_cred       verifier;
 	oncrpc_callback_t        callback = NULL;
 
-	reply.frame_size   = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
-	reply.rpc_id       = oncrpc_iob_get_int ( io_buf );
+	reply.frame_size = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
+	reply.rpc_id     = oncrpc_iob_get_int ( io_buf );
 
 	if ( oncrpc_iob_get_int ( io_buf ) != ONCRPC_REPLY )
 		return -ENOTSUP;
 
-	reply.reply_state  = oncrpc_iob_get_int ( io_buf );
+	reply.reply_state = oncrpc_iob_get_int ( io_buf );
 
 	if ( reply.reply_state == 0 )
 	{

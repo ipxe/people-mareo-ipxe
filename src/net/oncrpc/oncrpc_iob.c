@@ -60,29 +60,16 @@ struct io_buffer *oncrpc_alloc_iob ( const struct oncrpc_session *session,
 	return io_buf;
 }
 
-size_t oncrpc_strlen ( const char *str )
-{
-	size_t len;
-
-	len = sizeof ( uint32_t ) + strlen ( str );
-	while ( len % 4 )
-		++len;
-
-	return len;
-}
-
 size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val ) {
-	const char *s;
+	size_t len     = strlen ( val );
+	size_t padding = oncrpc_align ( len ) - len;
 
-	oncrpc_iob_add_int ( io_buf, strlen ( val ) );
+	oncrpc_iob_add_int ( io_buf, len );
 
-	for ( s = val; *s != '\0'; ++s )
-		* ( char * ) iob_put ( io_buf, sizeof ( *s ) ) = *s;
+	strcpy ( iob_put ( io_buf, len ), val );
+	memset ( iob_put ( io_buf, padding ), 0, padding );
 
-	while ( ( s++ - val ) % 4 != 0 )
-		* ( char * ) iob_put ( io_buf, sizeof ( *s ) ) = '\0';
-
-	return ( ( s - val ) - 1 + sizeof ( uint32_t ) );
+	return len + padding + sizeof ( uint32_t );
 }
 
 size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
@@ -129,8 +116,13 @@ size_t oncrpc_iob_add_cred ( struct io_buffer *io_buf,
 
 size_t oncrpc_iob_get_cred ( struct io_buffer *io_buf,
                              struct oncrpc_cred *cred ) {
+	if ( cred == NULL )
+		return * ( uint32_t * ) io_buf->data;
+
 	cred->flavor = oncrpc_iob_get_int ( io_buf );
 	cred->length = oncrpc_iob_get_int ( io_buf );
+
+	iob_pull ( io_buf, cred->length );
 
 	return ( 2 * sizeof ( uint32_t ) );
 }

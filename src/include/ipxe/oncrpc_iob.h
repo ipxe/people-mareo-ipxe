@@ -2,6 +2,7 @@
 #define _IPXE_ONCRPC_IOB_H
 
 #include <stdint.h>
+#include <string.h>
 #include <ipxe/iobuf.h>
 #include <ipxe/refcnt.h>
 #include <ipxe/oncrpc.h>
@@ -13,6 +14,8 @@
  */
 
 FILE_LICENCE ( GPL2_OR_LATER );
+
+#define oncrpc_align( size ) ( ( ( ( (size) - 1 ) >> 2 ) + 1 ) << 2 )
 
 #define oncrpc_iob_get_int( buf ) \
 ( { \
@@ -31,7 +34,6 @@ FILE_LICENCE ( GPL2_OR_LATER );
 struct io_buffer * oncrpc_alloc_iob ( const struct oncrpc_session *session,
                                       size_t len );
 
-size_t oncrpc_strlen ( const char *str );
 size_t oncrpc_iob_add_string ( struct io_buffer *io_buf, const char *val );
 
 size_t oncrpc_iob_add_intarray ( struct io_buffer *io_buf, size_t size,
@@ -40,6 +42,10 @@ size_t oncrpc_iob_add_cred ( struct io_buffer *io_buf,
                              struct oncrpc_cred *cred );
 size_t oncrpc_iob_get_cred ( struct io_buffer *io_buf,
                              struct oncrpc_cred *cred );
+
+static inline size_t oncrpc_strlen ( const char *str ) {
+	return oncrpc_align ( strlen ( str ) ) + sizeof ( uint32_t );
+}
 
 static inline size_t oncrpc_iob_add_int ( struct io_buffer *io_buf,
                                           uint32_t val ) {
@@ -65,6 +71,5 @@ static inline size_t oncrpc_iob_add_val ( struct io_buffer *io_buf,
 	memcpy ( iob_put ( io_buf, size ), val, size );
 	return size;
 }
-
 
 #endif /* _IPXE_ONCRPC_IOB_H */
