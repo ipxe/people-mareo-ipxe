@@ -66,8 +66,6 @@ struct nfs_request {
 	struct oncrpc_session   pm_session;
 	struct oncrpc_session   mount_session;
 	struct oncrpc_session   nfs_session;
-	uint16_t                mount_port;
-	uint16_t                nfs_port;
 
 	char *                  mountpoint;
 	char *                  filename;
@@ -107,14 +105,14 @@ static void nfs_free ( struct refcnt *refcnt ) {
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
 	DBGC ( nfs, "NFS_OPEN %p completed (%s)\n", nfs, strerror ( rc ) );
 
-	portmap_close_session ( &nfs->pm_session, rc );
+	oncrpc_close_session ( &nfs->pm_session, rc );
 	oncrpc_close_session ( &nfs->nfs_session, rc );
 	oncrpc_close_session ( &nfs->mount_session, rc );
 	intf_shutdown ( &nfs->xfer, rc );
 }
 
 static int umnt_cb ( struct oncrpc_session *session,
-                    struct oncrpc_reply *reply __unused) {
+                     struct oncrpc_reply *reply __unused) {
 	struct nfs_request      *nfs;
 
 	nfs = container_of ( session, struct nfs_request, mount_session );
@@ -128,61 +126,30 @@ static int umnt_cb ( struct oncrpc_session *session,
 static int read_cb ( struct oncrpc_session *session,
                      struct oncrpc_reply *reply) {
 	int                     rc;
-	uint64_t                filesize;
-	uint32_t                count;
-	uint32_t                eof;
 	struct nfs_request      *nfs;
+	struct nfs_read_reply   read_reply;
 
 	nfs = container_of ( session, struct nfs_request, nfs_session );
 	DBGC ( nfs, "NFS_OPEN %p got READ reply\n", nfs );
 
-	switch ( oncrpc_iob_get_int ( reply->data ) )
-	{
-	case NFS3_OK:
-		rc = 0;
-		break;
-	case NFS3ERR_PERM:
-		rc = -EPERM;
-		break;
-	case NFS3ERR_NOENT:
-		rc = -ENOENT;
-		break;
-	case NFS3ERR_IO:
-		rc = -EIO;
-		break;
-	case NFS3ERR_ACCES:
-		rc = -EACCES;
-		break;
-	case NFS3ERR_INVAL:
-		rc = -EINVAL;
-		break;
-	default:
-		rc = -ENOTSUP;
-		break;
-	}
-
+	rc = nfs_get_read_reply ( &read_reply, reply );
 	if ( rc != 0 )
 		goto err;
 
-	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
+	if ( nfs->file_offset == 0 )
 	{
-		iob_pull ( reply->data, 5 * sizeof ( uint32_t ));
-		filesize = oncrpc_iob_get_int64 ( reply->data );
-		iob_pull ( reply->data, 7 * sizeof ( uint64_t ));
-
-		if ( nfs->file_offset == 0 )
-		{
-			xfer_seek ( &nfs->xfer, filesize );
-			xfer_seek ( &nfs->xfer, 0 );
-		}
+		xfer_seek ( &nfs->xfer, read_reply.filesize );
+		xfer_seek ( &nfs->xfer, 0 );
 	}
 
-	count = oncrpc_iob_get_int ( reply->data );
-	eof   = oncrpc_iob_get_int ( reply->data );
+	nfs->file_offset += read_reply.count;
 
-	nfs->file_offset += count;
+	rc = xfer_deliver_raw ( &nfs->xfer, read_reply.data,
+	                        read_reply.data_len );
+	if ( rc != 0 )
+		goto err;
 
-	if ( ! eof )
+	if ( ! read_reply.eof )
 	{
 		rc = nfs_read ( session, &nfs->file_fh, nfs->file_offset,
 		                NFS_RSIZE, read_cb );
@@ -190,14 +157,7 @@ static int read_cb ( struct oncrpc_session *session,
 			goto err;
 	}
 
-	/* ignore data array length as it is always equal to 'count'. */
-	oncrpc_iob_get_int ( reply->data );
-
-	rc = xfer_deliver_raw ( &nfs->xfer, reply->data->data, count );
-	if ( rc != 0 )
-		goto err;
-
-	if ( eof )
+	if ( read_reply.eof )
 	{
 		rc = mount_umnt ( &nfs->mount_session, nfs->mountpoint,
 		                  umnt_cb );
@@ -264,8 +224,9 @@ err:
 
 static int getport_mount_cb ( struct oncrpc_session *session,
                               struct oncrpc_reply *reply) {
-	int                     rc;
-	struct nfs_request      *nfs;
+	int                             rc;
+	struct nfs_request              *nfs;
+	struct portmap_getport_reply    getport_reply;
 
 	nfs = container_of ( session, struct nfs_request, pm_session );
 	DBGC ( nfs, "NFS_OPEN %p got GETPORT reply\n", nfs );
@@ -276,11 +237,9 @@ static int getport_mount_cb ( struct oncrpc_session *session,
 		goto err;
 	}
 
-	nfs->mount_port = oncrpc_iob_get_int ( reply->data );
-	DBGC ( nfs, "\t MOUNT port is %d\n", nfs->mount_port );
-
-	rc = oncrpc_connect_named ( &nfs->mount_session, nfs->mount_port,
-	                            nfs->uri->host );
+	portmap_get_getport_reply ( &getport_reply, reply );
+	rc = mount_init_session ( &nfs->mount_session, getport_reply.port,
+	                          nfs->uri->host );
 	if ( rc != 0 )
 		goto err;
 
@@ -302,8 +261,9 @@ err:
 
 static int getport_nfs_cb ( struct oncrpc_session *session,
                             struct oncrpc_reply *reply) {
-	int                     rc;
-	struct nfs_request      *nfs;
+	int                             rc;
+	struct nfs_request              *nfs;
+	struct portmap_getport_reply    getport_reply;
 
 	nfs = container_of ( session, struct nfs_request, pm_session );
 	DBGC ( nfs, "NFS_OPEN %p got GETPORT reply\n", nfs );
@@ -314,13 +274,13 @@ static int getport_nfs_cb ( struct oncrpc_session *session,
 		goto err;
 	}
 
-	nfs->nfs_port = oncrpc_iob_get_int ( reply->data );
-	DBGC ( nfs, "\tNFS port is %d\n", nfs->nfs_port );
-
-	rc = oncrpc_connect_named ( &nfs->nfs_session, nfs->nfs_port,
-	                            nfs->uri->host );
+	portmap_get_getport_reply ( &getport_reply, reply );
+	rc = nfs_init_session ( &nfs->nfs_session, getport_reply.port,
+	                        nfs->uri->host );
 	if ( rc != 0 )
 		goto err;
+
+	nfs->nfs_session.credential = &nfs->auth_sys.credential;
 
 	return 0;
 
@@ -389,17 +349,12 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 
 	portmap_init_session ( &nfs->pm_session, uri_port ( uri, 0 ),
 	                       uri->host );
-	oncrpc_init_session ( &nfs->mount_session, &nfs->auth_sys.credential,
-	                      &oncrpc_auth_none, ONCRPC_MOUNT, MOUNT_VERS );
-	oncrpc_init_session ( &nfs->nfs_session, &nfs->auth_sys.credential,
-	                      &oncrpc_auth_none, ONCRPC_NFS, NFS_VERS );
 
 	nfs->filename   = basename ( nfs->mountpoint );
 	nfs->mountpoint = dirname ( nfs->mountpoint );
 
 	portmap_getport ( &nfs->pm_session, ONCRPC_MOUNT, MOUNT_VERS,
 	                  PORTMAP_PROT_TCP, &getport_mount_cb );
-
 
 	/* Attach to parent interface, mortalise self, and return */
 	intf_plug_plug ( &nfs->xfer, xfer );

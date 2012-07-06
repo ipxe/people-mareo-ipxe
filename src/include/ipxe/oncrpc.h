@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <ipxe/interface.h>
 #include <ipxe/iobuf.h>
-#include <ipxe/refcnt.h>
 
 /** @file
  *
@@ -39,7 +38,6 @@ struct oncrpc_cred_sys {
 };
 
 struct oncrpc_session {
-	struct refcnt           refcnt;
 	struct interface        intf;
 	struct list_head        pending_reply;
 	struct list_head        pending_call;
@@ -81,10 +79,11 @@ void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,
                            uint32_t prog_vers );
+void oncrpc_close_session ( struct oncrpc_session *session, int rc );
 int oncrpc_connect_named (struct oncrpc_session *session, uint16_t port,
                           const char *name );
-void oncrpc_close_session ( struct oncrpc_session *session, int rc );
 
+int oncrpc_get_reply ( struct oncrpc_reply *reply, struct io_buffer *io_buf );
 int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
                       struct io_buffer *io_buf, oncrpc_callback_t cb );
 

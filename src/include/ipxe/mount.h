@@ -43,12 +43,15 @@ struct mount_mnt_reply {
 	struct nfs_fh   fh;
 };
 
-int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
-                          struct oncrpc_reply *reply );
+int mount_init_session ( struct oncrpc_session *session, uint16_t port,
+                       const char *name );
 
 int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
                 oncrpc_callback_t cb);
 int mount_umnt ( struct oncrpc_session *session, const char *mountpoint,
                 oncrpc_callback_t cb);
+
+int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
+                          struct oncrpc_reply *reply );
 
 #endif /* _IPXE_MOUNT_H */

@@ -39,35 +39,21 @@
  *
  */
 
-#define MOUNT_MNT 1
-#define MOUNT_UMNT 3
+#define MOUNT_MNT       1
+#define MOUNT_UMNT      3
 
-int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
-                          struct oncrpc_reply *reply ) {
-	if (  ! mnt_reply || ! reply )
+int mount_init_session ( struct oncrpc_session *session, uint16_t port,
+                       const char *name) {
+	if ( ! session || port == 0 )
 		return -EINVAL;
 
-	mnt_reply->status = oncrpc_iob_get_int ( reply->data );
+	oncrpc_init_session ( session, &oncrpc_auth_none,
+                              &oncrpc_auth_none, ONCRPC_MOUNT,
+                              MOUNT_VERS );
 
-	switch ( mnt_reply->status )
-	{
-	case MNT3_OK:
-		nfs_iob_get_fh ( reply->data, &mnt_reply->fh );
-		return 0;
-	case MNT3ERR_NOENT:
-		return -ENOENT;
-	case MNT3ERR_IO:
-		return -EIO;
-	case MNT3ERR_ACCES:
-		return -EACCES;
-	case MNT3ERR_NOTDIR:
-		return -ENOTDIR;
-	case MNT3ERR_NAMETOOLONG:
-		return -ENAMETOOLONG;
-	default:
-		return -ENOTSUP;
-	}
+	return oncrpc_connect_named ( session, port, name );
 }
+
 
 int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
                 oncrpc_callback_t cb) {
@@ -91,4 +77,34 @@ int mount_umnt ( struct oncrpc_session *session, const char *mountpoint,
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
 	return oncrpc_call_iob ( session, MOUNT_UMNT, io_buf, cb );
+}
+
+int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
+                          struct oncrpc_reply *reply ) {
+	if (  ! mnt_reply || ! reply )
+		return -EINVAL;
+
+	mnt_reply->status = oncrpc_iob_get_int ( reply->data );
+
+	switch ( mnt_reply->status )
+	{
+	case MNT3_OK:
+		break;
+	case MNT3ERR_NOENT:
+		return -ENOENT;
+	case MNT3ERR_IO:
+		return -EIO;
+	case MNT3ERR_ACCES:
+		return -EACCES;
+	case MNT3ERR_NOTDIR:
+		return -ENOTDIR;
+	case MNT3ERR_NAMETOOLONG:
+		return -ENAMETOOLONG;
+	default:
+		return -ENOTSUP;
+	}
+
+	nfs_iob_get_fh ( reply->data, &mnt_reply->fh );
+
+	return 0;
 }

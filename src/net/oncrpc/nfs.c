@@ -41,8 +41,10 @@
  *
  */
 
-#define NFS_LOOKUP           3
-#define NFS_READ             6
+#define NFS_PORT        2049
+
+#define NFS_LOOKUP      3
+#define NFS_READ        6
 
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
 	fh->size = oncrpc_iob_get_int ( io_buf );
@@ -57,6 +59,21 @@ size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh ) {
 	s += oncrpc_iob_add_val ( io_buf, &fh->fh, fh->size );
 
 	return s;
+}
+
+int nfs_init_session ( struct oncrpc_session *session, uint16_t port,
+                       const char *name) {
+	if ( ! session )
+		return -EINVAL;
+
+	if ( ! port )
+		port = NFS_PORT;
+
+	oncrpc_init_session ( session, &oncrpc_auth_none,
+                              &oncrpc_auth_none, ONCRPC_NFS,
+                              NFS_VERS );
+
+	return oncrpc_connect_named ( session, port, name );
 }
 
 int nfs_lookup ( struct oncrpc_session *session, const struct nfs_fh *fh,
@@ -98,8 +115,7 @@ int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
 	switch ( lookup_reply->status )
 	{
 	case NFS3_OK:
-		nfs_iob_get_fh ( reply->data, &lookup_reply->fh );
-		return 0;
+		break;
 	case NFS3ERR_PERM:
 		return -EPERM;
 	case NFS3ERR_NOENT:
@@ -118,4 +134,55 @@ int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
 	default:
 		return -ENOTSUP;
 	}
+
+	nfs_iob_get_fh ( reply->data, &lookup_reply->fh );
+
+	return 0;
+}
+
+int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
+                         struct oncrpc_reply *reply ) {
+	if ( ! read_reply || ! reply )
+		return -EINVAL;
+
+	read_reply->status = oncrpc_iob_get_int ( reply->data );
+	switch ( read_reply->status )
+	{
+	case NFS3_OK:
+		 break;
+	case NFS3ERR_PERM:
+		return -EPERM;
+	case NFS3ERR_NOENT:
+		return -ENOENT;
+	case NFS3ERR_IO:
+		return -EIO;
+	case NFS3ERR_NXIO:
+		return -ENXIO;
+	case NFS3ERR_ACCES:
+		return -EACCES;
+	case NFS3ERR_INVAL:
+		return -EINVAL;
+	case NFS3ERR_STALE:
+	case NFS3ERR_BADHANDLE:
+	case NFS3ERR_SERVERFAULT:
+	default:
+		return -ENOTSUP;
+	}
+
+	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
+	{
+		iob_pull ( reply->data, 5 * sizeof ( uint32_t ));
+		read_reply->filesize = oncrpc_iob_get_int64 ( reply->data );
+		iob_pull ( reply->data, 7 * sizeof ( uint64_t ));
+	}
+
+	read_reply->count    = oncrpc_iob_get_int ( reply->data );
+	read_reply->eof      = oncrpc_iob_get_int ( reply->data );
+	read_reply->data_len = oncrpc_iob_get_int ( reply->data );
+	read_reply->data     = reply->data->data;
+
+	if ( read_reply->count != read_reply->data_len )
+		return -EINVAL;
+
+	return 0;
 }

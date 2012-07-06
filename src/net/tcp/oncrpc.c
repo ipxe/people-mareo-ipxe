@@ -46,8 +46,8 @@
 
 #define ONCRPC_HEADER_SIZE ( 11 * sizeof ( uint32_t ) )
 
-#define ONCRPC_CALL 0
-#define ONCRPC_REPLY 1
+#define ONCRPC_CALL     0
+#define ONCRPC_REPLY    1
 
 struct oncrpc_cred oncrpc_auth_none = {
 	.flavor = ONCRPC_AUTH_NONE,
@@ -74,30 +74,12 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
                             struct xfer_metadata *meta __unused ) {
 	int                      rc;
 	struct oncrpc_reply      reply;
-	struct oncrpc_cred       verifier;
 	oncrpc_callback_t        callback = NULL;
 
-	reply.frame_size = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
-	reply.rpc_id     = oncrpc_iob_get_int ( io_buf );
+	oncrpc_get_reply ( &reply, io_buf );
 
-	if ( oncrpc_iob_get_int ( io_buf ) != ONCRPC_REPLY )
-		return -ENOTSUP;
-
-	reply.reply_state = oncrpc_iob_get_int ( io_buf );
-
-	if ( reply.reply_state == 0 )
-	{
-		verifier.flavor = oncrpc_iob_get_int ( io_buf );
-		verifier.length = oncrpc_iob_get_int ( io_buf );
-		reply.verifier  = &verifier;
-		iob_pull ( io_buf, verifier.length );
-	}
-
-	reply.accept_state = oncrpc_iob_get_int ( io_buf );
-	reply.data         = io_buf;
-
-	struct oncrpc_pending_reply *p;
-	struct oncrpc_pending_reply *tmp;
+	struct oncrpc_pending_reply     *p;
+	struct oncrpc_pending_reply     *tmp;
 
 	list_for_each_entry_safe ( p, tmp, &session->pending_reply, list ) {
 		if ( reply.rpc_id != p->rpc_id )
@@ -118,9 +100,9 @@ static int oncrpc_deliver ( struct oncrpc_session *session,
 }
 
 static void oncrpc_window_changed ( struct oncrpc_session *session ) {
-	int rc;
-	struct oncrpc_pending_call *p;
-	struct oncrpc_pending_call *tmp;
+	int                             rc;
+	struct oncrpc_pending_call      *p;
+	struct oncrpc_pending_call      *tmp;
 
 	list_for_each_entry_safe ( p, tmp, &session->pending_call, list ) {
 		if ( xfer_window ( &session->intf ) < iob_len ( p->data ) )
@@ -165,13 +147,37 @@ void oncrpc_init_session ( struct oncrpc_session *session,
 	intf_init ( &session->intf, &oncrpc_intf_desc, NULL );
 }
 
+void oncrpc_close_session ( struct oncrpc_session *session, int rc ) {
+	if ( ! session )
+		return;
+
+	struct oncrpc_pending_reply     *pr;
+	struct oncrpc_pending_reply     *tr;
+
+	list_for_each_entry_safe ( pr, tr, &session->pending_reply, list ) {
+		list_del ( &pr->list );
+		free ( pr );
+	}
+
+	struct oncrpc_pending_call      *pc;
+	struct oncrpc_pending_call      *tc;
+
+	list_for_each_entry_safe ( pc, tc, &session->pending_call, list ) {
+		free_iob ( pc->data );
+		list_del ( &pc->list );
+		free ( pc );
+	}
+
+	intf_shutdown ( &session->intf, rc );
+}
+
 int oncrpc_connect_named ( struct oncrpc_session *session, uint16_t port,
                            const char *name ) {
 	if ( ! session || ! name )
 		return -EINVAL;
 
-	struct sockaddr_tcpip peer;
-	struct sockaddr_tcpip local;
+	struct sockaddr_tcpip   peer;
+	struct sockaddr_tcpip   local;
 
 	memset ( &peer, 0, sizeof ( peer ) );
 	memset ( &peer, 0, sizeof ( local ) );
@@ -183,43 +189,46 @@ int oncrpc_connect_named ( struct oncrpc_session *session, uint16_t port,
                                         ( struct sockaddr * ) &local );
 }
 
-void oncrpc_close_session ( struct oncrpc_session *session, int rc ) {
-	if ( ! session )
-		return;
+int oncrpc_get_reply ( struct oncrpc_reply *reply, struct io_buffer *io_buf ) {
+	if ( ! reply || ! io_buf )
+		return -EINVAL;
 
-	struct oncrpc_pending_reply *pr;
-	struct oncrpc_pending_reply *tr;
+	reply->frame_size = GET_FRAME_SIZE ( oncrpc_iob_get_int ( io_buf ) );
+	reply->rpc_id     = oncrpc_iob_get_int ( io_buf );
 
-	list_for_each_entry_safe ( pr, tr, &session->pending_reply, list ) {
-		list_del ( &pr->list );
-		free ( pr );
+	if ( oncrpc_iob_get_int ( io_buf ) != ONCRPC_REPLY )
+		return -EINVAL;
+
+	reply->reply_state = oncrpc_iob_get_int ( io_buf );
+
+	if ( reply->reply_state == 0 )
+	{
+		/* verifier.flavor */
+		oncrpc_iob_get_int ( io_buf );
+		/* verifier.length */
+		iob_pull ( io_buf, oncrpc_iob_get_int ( io_buf ));
+
+		/* We don't use the verifier in iPXE, let it be an empty
+		   verifier. */
+		reply->verifier = &oncrpc_auth_none;
 	}
 
-	struct oncrpc_pending_call *pc;
-	struct oncrpc_pending_call *tc;
+	reply->accept_state = oncrpc_iob_get_int ( io_buf );
+	reply->data         = io_buf;
 
-	list_for_each_entry_safe ( pc, tc, &session->pending_call, list ) {
-		free_iob ( pc->data );
-		list_del ( &pc->list );
-		free ( pc );
-	}
-
-	intf_shutdown ( &session->intf, rc );
+	return 0;
 }
 
 int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
                       struct io_buffer *io_buf, oncrpc_callback_t cb ) {
-	if ( ! session )
+	if ( ! session || ! io_buf)
 		return -EINVAL;
 
-	if ( ! io_buf )
-		return -EINVAL;
-
-	int rc = 0;
-	void *tail;
-	size_t header_size, frame_size;
-	struct oncrpc_pending_reply *pending_reply;
-	struct oncrpc_pending_call *pending_call;
+	int                             rc;
+	void                            *tail;
+	size_t                          header_size, frame_size;
+	struct oncrpc_pending_reply     *pending_reply;
+	struct oncrpc_pending_call      *pending_call;
 
 	header_size = ONCRPC_HEADER_SIZE + session->credential->length +
 	              session->verifier->length;

@@ -42,16 +42,6 @@
  *
  */
 
-static struct oncrpc_cred_sys oncrpc_auth_sys __unused = {
-	.credential = { ONCRPC_AUTH_SYS, 20 + 8 },
-	.stamp = 0,
-	.hostname = "atlas",
-	.uid = 0,
-	.gid = 0,
-	.aux_gid_len = 0,
-	.aux_gid = { 0 }
-};
-
 int portmap_init_session ( struct oncrpc_session *session, uint16_t port,
                             const char *name) {
 	if ( ! session )
@@ -65,10 +55,6 @@ int portmap_init_session ( struct oncrpc_session *session, uint16_t port,
                               PORTMAP_VERS );
 
 	return oncrpc_connect_named ( session, port, name );
-}
-
-void portmap_close_session ( struct oncrpc_session *session, int rc ) {
-	oncrpc_close_session ( session, rc );
 }
 
 int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
@@ -97,33 +83,13 @@ int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
 	return rc;
 }
 
-int portmap_callit ( struct oncrpc_session *session, uint32_t prog,
-                     uint32_t vers, uint32_t proc, struct io_buffer *io_buf,
-                     oncrpc_callback_t cb ) {
-	int rc;
-	struct io_buffer *call_buf;
-
-	if ( ! session )
+int portmap_get_getport_reply ( struct portmap_getport_reply *getport_reply,
+                                struct oncrpc_reply *reply ) {
+	if ( ! getport_reply || ! reply )
 		return -EINVAL;
 
-	call_buf = oncrpc_alloc_iob ( session, 4 * sizeof ( uint32_t ) +
-	           iob_len ( io_buf ) );
-	if ( ! call_buf )
-		return -ENOBUFS;
+	getport_reply->port = oncrpc_iob_get_int ( reply->data );
+	assert ( getport_reply != 0 && getport_reply->port < 65536 );
 
-	oncrpc_iob_add_int ( call_buf, prog );
-	oncrpc_iob_add_int ( call_buf, vers );
-	oncrpc_iob_add_int ( call_buf, proc );
-	oncrpc_iob_add_int ( call_buf, iob_len ( io_buf ) );
-	memcpy ( iob_put ( call_buf, iob_len ( io_buf ) ), io_buf->data,
-	         iob_len ( io_buf ) );
-
-	rc = oncrpc_call_iob ( session, PORTMAP_CALLIT, call_buf, cb );
-
-	if ( rc != 0 )
-		free_iob ( call_buf );
-	else
-		free_iob ( io_buf );
-
-	return rc;
+	return 0;
 }
