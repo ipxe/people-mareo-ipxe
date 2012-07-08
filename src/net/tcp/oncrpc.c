@@ -182,7 +182,7 @@ int oncrpc_connect_named ( struct oncrpc_session *session, uint16_t port,
 	memset ( &peer, 0, sizeof ( peer ) );
 	memset ( &peer, 0, sizeof ( local ) );
 	peer.st_port = htons ( port );
-	local.st_port = htons ( rand() % 1024 );
+	local.st_port = htons ( 1 + ( rand() % 1023 ) );
 
 	return xfer_open_named_socket ( &session->intf, SOCK_STREAM,
 	                                ( struct sockaddr * ) &peer, name,
