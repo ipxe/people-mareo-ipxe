@@ -233,7 +233,7 @@ static int getport_mount_cb ( struct oncrpc_session *session,
 
 	if ( reply->accept_state != 0 )
 	{
-		rc = -ENOTSUP;
+		rc = -EPROTO;
 		goto err;
 	}
 
@@ -270,7 +270,7 @@ static int getport_nfs_cb ( struct oncrpc_session *session,
 
 	if ( reply->accept_state != 0 )
 	{
-		rc = -ENOTSUP;
+		rc = -EPROTO;
 		goto err;
 	}
 

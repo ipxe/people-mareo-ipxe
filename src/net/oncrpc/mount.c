@@ -101,7 +101,7 @@ int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
 	case MNT3ERR_NAMETOOLONG:
 		return -ENAMETOOLONG;
 	default:
-		return -ENOTSUP;
+		return -EPROTO;
 	}
 
 	nfs_iob_get_fh ( reply->data, &mnt_reply->fh );

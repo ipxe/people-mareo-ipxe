@@ -132,7 +132,7 @@ int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
 	case NFS3ERR_BADHANDLE:
 	case NFS3ERR_SERVERFAULT:
 	default:
-		return -ENOTSUP;
+		return -EPROTO;
 	}
 
 	nfs_iob_get_fh ( reply->data, &lookup_reply->fh );
@@ -166,7 +166,7 @@ int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
 	case NFS3ERR_BADHANDLE:
 	case NFS3ERR_SERVERFAULT:
 	default:
-		return -ENOTSUP;
+		return -EPROTO;
 	}
 
 	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
@@ -182,7 +182,7 @@ int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
 	read_reply->data     = reply->data->data;
 
 	if ( read_reply->count != read_reply->data_len )
-		return -EINVAL;
+		return -EPROTO;
 
 	return 0;
 }
