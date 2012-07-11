@@ -51,6 +51,13 @@ FEATURE ( FEATURE_PROTOCOL, "NFS", DHCP_EB_FEATURE_NFS, 1 );
 
 #define NFS_RSIZE 1300
 
+enum nfs_state {
+	NFS_NONE = 0,
+	NFS_PORTMAP,
+	NFS_MOUNT,
+	NFS_NFS
+};
+
 /**
  * A NFS request
  *
@@ -60,6 +67,8 @@ struct nfs_request {
 	struct refcnt           refcnt;
 	/** Data transfer interface */
 	struct interface        xfer;
+
+	enum nfs_state          state;
 
 	struct oncrpc_cred_sys  auth_sys;
 
@@ -93,7 +102,9 @@ static void nfs_free ( struct refcnt *refcnt ) {
 	free ( nfs->mountpoint );
 	free ( nfs->auth_sys.hostname );
 	uri_put ( nfs->uri );
-	// free ( nfs );
+
+	/* Causes segfault for a reason to be discovered. */
+	/* free ( nfs ); */
 }
 
 /**
@@ -105,9 +116,13 @@ static void nfs_free ( struct refcnt *refcnt ) {
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
 	DBGC ( nfs, "NFS_OPEN %p completed (%s)\n", nfs, strerror ( rc ) );
 
-	oncrpc_close_session ( &nfs->pm_session, rc );
-	oncrpc_close_session ( &nfs->nfs_session, rc );
-	oncrpc_close_session ( &nfs->mount_session, rc );
+	if ( nfs->state >= NFS_PORTMAP )
+		oncrpc_close_session ( &nfs->pm_session, rc );
+	if ( nfs->state >= NFS_MOUNT )
+		oncrpc_close_session ( &nfs->mount_session, rc );
+	if ( nfs->state >= NFS_NFS )
+		oncrpc_close_session ( &nfs->nfs_session, rc );
+
 	intf_shutdown ( &nfs->xfer, rc );
 }
 
@@ -252,6 +267,8 @@ static int getport_mount_cb ( struct oncrpc_session *session,
 	if ( rc != 0 )
 		goto err;
 
+	nfs->state = NFS_MOUNT;
+
 	return 0;
 
 err:
@@ -281,6 +298,7 @@ static int getport_nfs_cb ( struct oncrpc_session *session,
 		goto err;
 
 	nfs->nfs_session.credential = &nfs->auth_sys.credential;
+	nfs->state = NFS_NFS;
 
 	return 0;
 
@@ -349,6 +367,7 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 
 	portmap_init_session ( &nfs->pm_session, uri_port ( uri, 0 ),
 	                       uri->host );
+	nfs->state = NFS_PORTMAP;
 
 	nfs->filename   = basename ( nfs->mountpoint );
 	nfs->mountpoint = dirname ( nfs->mountpoint );
