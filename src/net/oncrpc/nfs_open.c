@@ -83,13 +83,13 @@ struct nfs_request {
 	/** Data transfer interface */
 	struct interface        xfer;
 
-	enum nfs_pm_state       pm_state;
-	enum nfs_mount_state    mount_state;
-	enum nfs_state          nfs_state;
-
 	struct interface        pm_intf;
 	struct interface        mount_intf;
 	struct interface        nfs_intf;
+
+	enum nfs_pm_state       pm_state;
+	enum nfs_mount_state    mount_state;
+	enum nfs_state          nfs_state;
 
 	struct oncrpc_session   pm_session;
 	struct oncrpc_session   mount_session;
@@ -233,6 +233,8 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 
 		nfs->pm_state++;
 		nfs_pm_step ( nfs );
+
+		free ( io_buf );
 		return 0;
 	}
 
@@ -250,11 +252,14 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 
 		intf_shutdown ( &nfs->pm_intf, 0 );
 		nfs->pm_state++;
+
+		free ( io_buf );
 		return 0;
 	}
 
 	rc = -EPROTO;
 err:
+	free ( io_buf );
 	nfs_done ( nfs, rc );
 	return 0;
 }
@@ -318,17 +323,22 @@ static int nfs_mount_deliver ( struct nfs_request *nfs,
 		nfs->current_fh = mnt_reply.fh;
 		nfs->nfs_state = NFS_LOOKUP;
 		nfs_step ( nfs );
+
+		free ( io_buf );
 		return 0;
 	}
 
 	if ( nfs->mount_state == NFS_MOUNT_UMNT ) {
 		DBGC ( nfs, "NFS_OPEN %p got UMNT reply\n", nfs );
 		nfs_done ( nfs, 0 );
+
+		free ( io_buf );
 		return 0;
 	}
 
 	rc = -EPROTO;
 err:
+	free ( io_buf );
 	nfs_done ( nfs, rc );
 	return 0;
 }
@@ -397,6 +407,8 @@ static int nfs_deliver ( struct nfs_request *nfs,
 		nfs->current_fh = lookup_reply.fh;
 		nfs->nfs_state++;
 		nfs_step ( nfs );
+
+		free ( io_buf );
 		return 0;
 	}
 
@@ -422,19 +434,20 @@ static int nfs_deliver ( struct nfs_request *nfs,
 
 		if ( ! read_reply.eof )
 			nfs_step ( nfs );
-
-		if ( read_reply.eof )
-		{
+		else {
 			intf_shutdown ( &nfs->nfs_intf, 0 );
 			nfs->nfs_state++;
 			nfs->mount_state++;
 			nfs_mount_step ( nfs );
 		}
+
+		free ( io_buf );
 		return 0;
 	}
 
 	rc = -EPROTO;
 err:
+	free ( io_buf );
 	nfs_done ( nfs, rc );
 	return 0;
 }
