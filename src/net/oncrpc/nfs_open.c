@@ -70,6 +70,7 @@ enum nfs_state {
 	NFS_LOOKUP,
 	NFS_LOOKUP_SENT,
 	NFS_READ,
+	NFS_READ_SENT,
 	NFS_CLOSED,
 };
 
@@ -101,7 +102,6 @@ struct nfs_request {
 	char *                  filename;
 	struct nfs_fh           current_fh;
 	uint64_t                file_offset;
-	uint64_t                file_offset_req;
 
 	/** URI being fetched */
 	struct uri              *uri;
@@ -291,8 +291,6 @@ static void nfs_mount_step ( struct nfs_request *nfs ) {
 		                  nfs->mountpoint );
 		if ( rc != 0 )
 			goto err;
-
-		return;
 	}
 
 	return;
@@ -366,15 +364,14 @@ static void nfs_step ( struct nfs_request *nfs ) {
 		DBGC ( nfs, "NFS_OPEN %p READ call\n", nfs );
 
 		rc = nfs_read ( &nfs->nfs_intf, &nfs->nfs_session,
-		                &nfs->current_fh, nfs->file_offset_req,
+		                &nfs->current_fh, nfs->file_offset,
 		                NFS_RSIZE );
 		if ( rc == -EAGAIN )
 			return;
 		if ( rc != 0 )
 			goto err;
 
-		nfs->file_offset_req += NFS_RSIZE;
-
+		nfs->nfs_state++;
 		return;
 	}
 
@@ -412,7 +409,7 @@ static int nfs_deliver ( struct nfs_request *nfs,
 		goto done;
 	}
 
-	if ( nfs->nfs_state == NFS_READ ) {
+	if ( nfs->nfs_state == NFS_READ_SENT ) {
 		DBGC ( nfs, "NFS_OPEN %p got READ reply\n", nfs );
 
 		rc = nfs_get_read_reply ( &read_reply, &reply );
@@ -433,6 +430,7 @@ static int nfs_deliver ( struct nfs_request *nfs,
 			goto err;
 
 		if ( ! read_reply.eof ) {
+			nfs->nfs_state--;
 			nfs_step ( nfs );
 		} else {
 			intf_shutdown ( &nfs->nfs_intf, 0 );
