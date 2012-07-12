@@ -51,6 +51,7 @@ void mount_init_session ( struct oncrpc_session *session ) {
 
 int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
                 const char *mountpoint ) {
+	int              rc;
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( mountpoint ) );
@@ -59,11 +60,16 @@ int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
 
-	return  oncrpc_call_iob ( intf, session, MOUNT_MNT, io_buf );
+	rc = oncrpc_call_iob ( intf, session, MOUNT_MNT, io_buf );
+	if ( rc != 0 )
+		free_iob ( io_buf );
+
+	return rc;
 }
 
 int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
                  const char *mountpoint ) {
+	int              rc;
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( mountpoint ) );
@@ -72,7 +78,11 @@ int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
 
-	return oncrpc_call_iob ( intf, session, MOUNT_UMNT, io_buf );
+	rc = oncrpc_call_iob ( intf, session, MOUNT_UMNT, io_buf );
+	if ( rc != 0 )
+		free_iob ( io_buf );
+
+	return rc;
 }
 
 int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,

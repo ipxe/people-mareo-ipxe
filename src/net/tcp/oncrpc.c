@@ -64,7 +64,6 @@ void oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys, uint32_t uid,
 
 	auth_sys->credential.flavor = ONCRPC_AUTH_SYS;
 	auth_sys->credential.length = 16 + oncrpc_strlen ( hostname );
-
 }
 
 void oncrpc_init_session ( struct oncrpc_session *session,

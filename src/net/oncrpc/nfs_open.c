@@ -101,6 +101,7 @@ struct nfs_request {
 	char *                  filename;
 	struct nfs_fh           current_fh;
 	uint64_t                file_offset;
+	uint64_t                file_offset_req;
 
 	/** URI being fetched */
 	struct uri              *uri;
@@ -234,8 +235,7 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 		nfs->pm_state++;
 		nfs_pm_step ( nfs );
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	if ( nfs->pm_state == NFS_PORTMAP_NFSPORT ) {
@@ -253,14 +253,14 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 		intf_shutdown ( &nfs->pm_intf, 0 );
 		nfs->pm_state++;
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	rc = -EPROTO;
 err:
-	free ( io_buf );
 	nfs_done ( nfs, rc );
+done:
+	free_iob ( io_buf );
 	return 0;
 }
 
@@ -324,22 +324,21 @@ static int nfs_mount_deliver ( struct nfs_request *nfs,
 		nfs->nfs_state = NFS_LOOKUP;
 		nfs_step ( nfs );
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	if ( nfs->mount_state == NFS_MOUNT_UMNT ) {
 		DBGC ( nfs, "NFS_OPEN %p got UMNT reply\n", nfs );
 		nfs_done ( nfs, 0 );
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	rc = -EPROTO;
 err:
-	free ( io_buf );
 	nfs_done ( nfs, rc );
+done:
+	free_iob ( io_buf );
 	return 0;
 }
 
@@ -367,12 +366,14 @@ static void nfs_step ( struct nfs_request *nfs ) {
 		DBGC ( nfs, "NFS_OPEN %p READ call\n", nfs );
 
 		rc = nfs_read ( &nfs->nfs_intf, &nfs->nfs_session,
-		                &nfs->current_fh, nfs->file_offset,
+		                &nfs->current_fh, nfs->file_offset_req,
 		                NFS_RSIZE );
 		if ( rc == -EAGAIN )
 			return;
 		if ( rc != 0 )
 			goto err;
+
+		nfs->file_offset_req += NFS_RSIZE;
 
 		return;
 	}
@@ -408,8 +409,7 @@ static int nfs_deliver ( struct nfs_request *nfs,
 		nfs->nfs_state++;
 		nfs_step ( nfs );
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	if ( nfs->nfs_state == NFS_READ ) {
@@ -432,23 +432,23 @@ static int nfs_deliver ( struct nfs_request *nfs,
 		if ( rc != 0 )
 			goto err;
 
-		if ( ! read_reply.eof )
+		if ( ! read_reply.eof ) {
 			nfs_step ( nfs );
-		else {
+		} else {
 			intf_shutdown ( &nfs->nfs_intf, 0 );
 			nfs->nfs_state++;
 			nfs->mount_state++;
 			nfs_mount_step ( nfs );
 		}
 
-		free ( io_buf );
-		return 0;
+		goto done;
 	}
 
 	rc = -EPROTO;
 err:
-	free ( io_buf );
 	nfs_done ( nfs, rc );
+done:
+	free_iob ( io_buf );
 	return 0;
 }
 

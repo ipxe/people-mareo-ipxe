@@ -41,8 +41,6 @@
  *
  */
 
-#define NFS_PORT        2049
-
 #define NFS_LOOKUP      3
 #define NFS_READ        6
 
@@ -69,6 +67,7 @@ void nfs_init_session ( struct oncrpc_session *session ) {
 
 int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
                  const struct nfs_fh *fh, const char *filename ) {
+	int              rc;
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( filename ) +
@@ -78,11 +77,17 @@ int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
 
 	nfs_iob_add_fh ( io_buf, fh );
 	oncrpc_iob_add_string ( io_buf, filename );
-	return  oncrpc_call_iob ( intf, session, NFS_LOOKUP, io_buf );
+
+	rc =  oncrpc_call_iob ( intf, session, NFS_LOOKUP, io_buf );
+	if ( rc != 0 )
+		free_iob ( io_buf );
+
+	return rc;
 }
 
 int nfs_read ( struct interface *intf, struct oncrpc_session *session,
                const struct nfs_fh *fh, uint64_t offset, uint32_t count ) {
+	int              rc;
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session,  fh->size + sizeof ( uint64_t ) +
@@ -94,7 +99,11 @@ int nfs_read ( struct interface *intf, struct oncrpc_session *session,
 	oncrpc_iob_add_int64 ( io_buf, offset );
 	oncrpc_iob_add_int ( io_buf, count );
 
-	return oncrpc_call_iob ( intf, session, NFS_READ, io_buf );
+	rc = oncrpc_call_iob ( intf, session, NFS_READ, io_buf );
+	if ( rc != 0 )
+		free_iob ( io_buf );
+
+	return rc;
 }
 
 int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
