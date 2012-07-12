@@ -42,23 +42,14 @@
  *
  */
 
-int portmap_init_session ( struct oncrpc_session *session, uint16_t port,
-                            const char *name) {
-	if ( ! session )
-		return -EINVAL;
-
-	if ( ! port )
-		port = PORTMAP_PORT;
-
+void portmap_init_session ( struct oncrpc_session *session ) {
 	oncrpc_init_session ( session, &oncrpc_auth_none,
                               &oncrpc_auth_none, ONCRPC_PORTMAP,
                               PORTMAP_VERS );
-
-	return oncrpc_connect_named ( session, port, name );
 }
 
-int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
-                      uint32_t vers, uint32_t prot, oncrpc_callback_t cb ) {
+int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
+                      uint32_t prog, uint32_t vers, uint32_t prot ) {
 	int rc;
 	struct io_buffer *call_buf;
 
@@ -75,7 +66,7 @@ int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
 	oncrpc_iob_add_int ( call_buf, prot );
 	oncrpc_iob_add_int ( call_buf, 0 );
 
-	rc = oncrpc_call_iob ( session, PORTMAP_GETPORT, call_buf, cb );
+	rc = oncrpc_call_iob ( intf, session, PORTMAP_GETPORT, call_buf );
 
 	if ( rc != 0 )
 		free_iob ( call_buf );

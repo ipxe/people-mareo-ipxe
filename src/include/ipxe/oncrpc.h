@@ -37,17 +37,6 @@ struct oncrpc_cred_sys {
 	uint32_t               aux_gid[16];
 };
 
-struct oncrpc_session {
-	struct interface        intf;
-	struct list_head        pending_reply;
-	struct list_head        pending_call;
-	struct oncrpc_cred      *credential;
-	struct oncrpc_cred      *verifier;
-	uint32_t                rpc_id;
-	uint32_t                prog_name;
-	uint32_t                prog_vers;
-};
-
 struct oncrpc_reply
 {
 	struct oncrpc_cred      *verifier;
@@ -58,17 +47,13 @@ struct oncrpc_reply
 	struct io_buffer        *data;
 };
 
-typedef int ( *oncrpc_callback_t ) ( struct oncrpc_session *session,
-                                     struct oncrpc_reply *reply );
-struct oncrpc_pending_reply {
-	struct list_head       list;
-	oncrpc_callback_t      callback;
-	uint32_t               rpc_id;
-};
-
-struct oncrpc_pending_call {
-	struct list_head       list;
-	struct io_buffer       *data;
+struct oncrpc_session {
+	struct oncrpc_reply     pending_reply;
+	struct oncrpc_cred      *credential;
+	struct oncrpc_cred      *verifier;
+	uint32_t                rpc_id;
+	uint32_t                prog_name;
+	uint32_t                prog_vers;
 };
 
 extern struct oncrpc_cred oncrpc_auth_none;
@@ -79,12 +64,10 @@ void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,
                            uint32_t prog_vers );
-void oncrpc_close_session ( struct oncrpc_session *session, int rc );
-int oncrpc_connect_named (struct oncrpc_session *session, uint16_t port,
-                          const char *name );
 
-int oncrpc_get_reply ( struct oncrpc_reply *reply, struct io_buffer *io_buf );
-int oncrpc_call_iob ( struct oncrpc_session *session, uint32_t proc_name,
-                      struct io_buffer *io_buf, oncrpc_callback_t cb );
+int oncrpc_call_iob ( struct interface *intf, struct oncrpc_session *session,
+                      uint32_t proc_name, struct io_buffer *io_buf );
+int oncrpc_get_reply ( struct oncrpc_session *session,
+                       struct oncrpc_reply *reply, struct io_buffer *io_buf );
 
 #endif /* _IPXE_ONCRPC_H */

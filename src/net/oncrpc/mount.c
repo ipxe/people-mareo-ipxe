@@ -42,21 +42,15 @@
 #define MOUNT_MNT       1
 #define MOUNT_UMNT      3
 
-int mount_init_session ( struct oncrpc_session *session, uint16_t port,
-                       const char *name) {
-	if ( ! session || port == 0 )
-		return -EINVAL;
-
+void mount_init_session ( struct oncrpc_session *session ) {
 	oncrpc_init_session ( session, &oncrpc_auth_none,
                               &oncrpc_auth_none, ONCRPC_MOUNT,
                               MOUNT_VERS );
-
-	return oncrpc_connect_named ( session, port, name );
 }
 
 
-int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
-                oncrpc_callback_t cb) {
+int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
+                const char *mountpoint ) {
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( mountpoint ) );
@@ -64,11 +58,12 @@ int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
 		return -ENOBUFS;
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
-	return  oncrpc_call_iob ( session, MOUNT_MNT, io_buf, cb );
+
+	return  oncrpc_call_iob ( intf, session, MOUNT_MNT, io_buf );
 }
 
-int mount_umnt ( struct oncrpc_session *session, const char *mountpoint,
-                oncrpc_callback_t cb) {
+int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
+                 const char *mountpoint ) {
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( mountpoint ) );
@@ -76,7 +71,8 @@ int mount_umnt ( struct oncrpc_session *session, const char *mountpoint,
 		return -ENOBUFS;
 
 	oncrpc_iob_add_string ( io_buf, mountpoint );
-	return oncrpc_call_iob ( session, MOUNT_UMNT, io_buf, cb );
+
+	return oncrpc_call_iob ( intf, session, MOUNT_UMNT, io_buf );
 }
 
 int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,

@@ -61,23 +61,14 @@ size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh ) {
 	return s;
 }
 
-int nfs_init_session ( struct oncrpc_session *session, uint16_t port,
-                       const char *name) {
-	if ( ! session )
-		return -EINVAL;
-
-	if ( ! port )
-		port = NFS_PORT;
-
+void nfs_init_session ( struct oncrpc_session *session ) {
 	oncrpc_init_session ( session, &oncrpc_auth_none,
                               &oncrpc_auth_none, ONCRPC_NFS,
                               NFS_VERS );
-
-	return oncrpc_connect_named ( session, port, name );
 }
 
-int nfs_lookup ( struct oncrpc_session *session, const struct nfs_fh *fh,
-                 const char *filename, oncrpc_callback_t cb ) {
+int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
+                 const struct nfs_fh *fh, const char *filename ) {
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session, oncrpc_strlen ( filename ) +
@@ -87,11 +78,11 @@ int nfs_lookup ( struct oncrpc_session *session, const struct nfs_fh *fh,
 
 	nfs_iob_add_fh ( io_buf, fh );
 	oncrpc_iob_add_string ( io_buf, filename );
-	return  oncrpc_call_iob ( session, NFS_LOOKUP, io_buf, cb );
+	return  oncrpc_call_iob ( intf, session, NFS_LOOKUP, io_buf );
 }
 
-int nfs_read ( struct oncrpc_session *session, const struct nfs_fh *fh,
-               uint64_t offset, uint32_t count, oncrpc_callback_t cb ) {
+int nfs_read ( struct interface *intf, struct oncrpc_session *session,
+               const struct nfs_fh *fh, uint64_t offset, uint32_t count ) {
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session,  fh->size + sizeof ( uint64_t ) +
@@ -103,7 +94,7 @@ int nfs_read ( struct oncrpc_session *session, const struct nfs_fh *fh,
 	oncrpc_iob_add_int64 ( io_buf, offset );
 	oncrpc_iob_add_int ( io_buf, count );
 
-	return oncrpc_call_iob ( session, NFS_READ, io_buf, cb );
+	return oncrpc_call_iob ( intf, session, NFS_READ, io_buf );
 }
 
 int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,

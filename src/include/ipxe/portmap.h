@@ -34,12 +34,11 @@ struct portmap_getport_reply {
 	uint32_t        port;
 };
 
-int portmap_init_session ( struct oncrpc_session *session, uint16_t port,
-                           const char *name);
-int portmap_getport ( struct oncrpc_session *session, uint32_t prog,
-                      uint32_t vers, uint32_t prot, oncrpc_callback_t cb );
+void portmap_init_session ( struct oncrpc_session *session );
+int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
+                      uint32_t prog, uint32_t vers, uint32_t prot );
 int portmap_get_getport_reply ( struct portmap_getport_reply *getport_reply,
-                                 struct oncrpc_reply *reply );
+                                struct oncrpc_reply *reply );
 
 
 #endif /* _IPXE_PORTMAP_H */

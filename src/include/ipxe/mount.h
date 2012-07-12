@@ -43,13 +43,12 @@ struct mount_mnt_reply {
 	struct nfs_fh   fh;
 };
 
-int mount_init_session ( struct oncrpc_session *session, uint16_t port,
-                       const char *name );
+void mount_init_session ( struct oncrpc_session *session );
 
-int mount_mnt ( struct oncrpc_session *session, const char *mountpoint,
-                oncrpc_callback_t cb);
-int mount_umnt ( struct oncrpc_session *session, const char *mountpoint,
-                oncrpc_callback_t cb);
+int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
+                const char *mountpoint );
+int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
+                 const char *mountpoint );
 
 int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
                           struct oncrpc_reply *reply );
