@@ -135,6 +135,9 @@ static void nfs_free ( struct refcnt *refcnt ) {
  * @v rc		Return status code
  */
 static void nfs_done ( struct nfs_request *nfs, int rc ) {
+	if ( rc == 0 && nfs->nfs_state != NFS_CLOSED )
+		rc = -ECONNRESET;
+
 	DBGC ( nfs, "NFS_OPEN %p completed (%s)\n", nfs, strerror ( rc ) );
 
 	intf_shutdown ( &nfs->xfer, rc );
