@@ -77,7 +77,8 @@ int portmap_get_getport_reply ( struct portmap_getport_reply *getport_reply,
 		return -EINVAL;
 
 	getport_reply->port = oncrpc_iob_get_int ( reply->data );
-	assert ( getport_reply != 0 && getport_reply->port < 65536 );
+	if ( getport_reply == 0 || getport_reply->port >= 65536 )
+		return -EINVAL;
 
 	return 0;
 }

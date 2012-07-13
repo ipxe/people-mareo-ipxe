@@ -25,10 +25,24 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define PORTMAP_PROTO_TCP 6
 #define PORTMAP_PROTO_UDP 17
 
+/**
+ * A PORTMAP GETPORT reply
+ *
+ */
 struct portmap_getport_reply {
+	/** Port returned */
 	uint32_t        port;
 };
 
+/**
+ * Prepare an ONC RPC session to be used as a PORTMAP session
+ *
+ * @v session           ONC RPC session
+ * @v credential        ONC RPC credential
+ *
+ * The credential parameter must not be NULL, use 'oncrpc_auth_none' if you
+ * don't want a particular scheme to be used.
+ */
 static inline void portmap_init_session ( struct oncrpc_session *session,
                                           struct oncrpc_cred *credential) {
 	oncrpc_init_session ( session, credential, &oncrpc_auth_none,

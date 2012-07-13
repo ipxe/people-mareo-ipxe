@@ -39,9 +39,19 @@
  *
  */
 
+/** MNT procedure number */
 #define MOUNT_MNT       1
+/** UMNT procedure number */
 #define MOUNT_UMNT      3
 
+/**
+ * Send a MNT request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v mountpoinrt       The path of the directory to mount.
+ * @ret rc              Return status code
+ */
 int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
                 const char *mountpoint ) {
 	int              rc;
@@ -60,6 +70,14 @@ int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
 	return rc;
 }
 
+/**
+ * Send a UMNT request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v mountpoinrt       The path of the directory to unmount.
+ * @ret rc              Return status code
+ */
 int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
                  const char *mountpoint ) {
 	int              rc;
@@ -78,6 +96,13 @@ int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
 	return rc;
 }
 
+/**
+ * Parse an MNT reply
+ *
+ * @v mnt_reply         A structure where data will be saved
+ * @v reply             The ONC RPC reply to get data from
+ * @ret rc              Return status code
+ */
 int mount_get_mnt_reply ( struct mount_mnt_reply *mnt_reply,
                           struct oncrpc_reply *reply ) {
 	if (  ! mnt_reply || ! reply )
