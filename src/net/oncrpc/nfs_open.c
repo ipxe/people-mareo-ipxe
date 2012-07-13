@@ -175,7 +175,7 @@ static void nfs_pm_step ( struct nfs_request *nfs ) {
 
 		rc = portmap_getport ( &nfs->pm_intf, &nfs->pm_session,
 		                       ONCRPC_MOUNT, MOUNT_VERS,
-		                       PORTMAP_PROT_TCP );
+		                       PORTMAP_PROTO_TCP );
 		if ( rc == -EAGAIN )
 			return;
 
@@ -191,7 +191,7 @@ static void nfs_pm_step ( struct nfs_request *nfs ) {
 
 		rc = portmap_getport ( &nfs->pm_intf, &nfs->pm_session,
 		                       ONCRPC_NFS, NFS_VERS,
-		                       PORTMAP_PROT_TCP );
+		                       PORTMAP_PROTO_TCP );
 		if ( rc == -EAGAIN )
 			return;
 
@@ -545,12 +545,9 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	intf_init ( &nfs->nfs_intf, &nfs_desc, &nfs->refcnt );
 	nfs->uri = uri_get ( uri );
 
-	portmap_init_session ( &nfs->pm_session );
-	mount_init_session ( &nfs->mount_session );
-	nfs_init_session ( &nfs->nfs_session );
-
-	nfs->mount_session.credential = &nfs->auth_sys.credential;
-	nfs->nfs_session.credential = &nfs->auth_sys.credential;
+	portmap_init_session ( &nfs->pm_session, &nfs->auth_sys.credential );
+	mount_init_session ( &nfs->mount_session, &nfs->auth_sys.credential );
+	nfs_init_session ( &nfs->nfs_session, &nfs->auth_sys.credential );
 
 	nfs->filename   = basename ( nfs->mountpoint );
 	nfs->mountpoint = dirname ( nfs->mountpoint );

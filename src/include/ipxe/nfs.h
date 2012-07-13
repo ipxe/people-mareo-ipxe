@@ -16,7 +16,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define ONCRPC_NFS 100003
 
 /** NFS protocol version. */
-#define NFS_VERS 3
+#define NFS_VERS   3
 
 #define NFS3_OK             0
 #define NFS3ERR_PERM        1
@@ -74,7 +74,11 @@ struct nfs_read_reply {
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh );
 size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh );
 
-void nfs_init_session ( struct oncrpc_session *session );
+static inline void nfs_init_session ( struct oncrpc_session *session,
+                                      struct oncrpc_cred *credential ) {
+	oncrpc_init_session ( session, credential, &oncrpc_auth_none,
+	                      ONCRPC_NFS, NFS_VERS );
+}
 
 int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
                  const struct nfs_fh *fh, const char *filename );

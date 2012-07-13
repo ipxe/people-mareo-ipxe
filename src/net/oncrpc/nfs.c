@@ -59,12 +59,6 @@ size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh ) {
 	return s;
 }
 
-void nfs_init_session ( struct oncrpc_session *session ) {
-	oncrpc_init_session ( session, &oncrpc_auth_none,
-                              &oncrpc_auth_none, ONCRPC_NFS,
-                              NFS_VERS );
-}
-
 int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
                  const struct nfs_fh *fh, const char *filename ) {
 	int              rc;

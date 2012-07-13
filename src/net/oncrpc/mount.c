@@ -42,13 +42,6 @@
 #define MOUNT_MNT       1
 #define MOUNT_UMNT      3
 
-void mount_init_session ( struct oncrpc_session *session ) {
-	oncrpc_init_session ( session, &oncrpc_auth_none,
-                              &oncrpc_auth_none, ONCRPC_MOUNT,
-                              MOUNT_VERS );
-}
-
-
 int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
                 const char *mountpoint ) {
 	int              rc;

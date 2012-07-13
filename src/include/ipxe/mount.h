@@ -43,7 +43,11 @@ struct mount_mnt_reply {
 	struct nfs_fh   fh;
 };
 
-void mount_init_session ( struct oncrpc_session *session );
+static inline void mount_init_session ( struct oncrpc_session *session,
+                                        struct oncrpc_cred *credential) {
+	oncrpc_init_session ( session, credential, &oncrpc_auth_none,
+	                      ONCRPC_MOUNT, MOUNT_VERS );
+}
 
 int mount_mnt ( struct interface *intf, struct oncrpc_session *session,
                 const char *mountpoint );

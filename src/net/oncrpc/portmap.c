@@ -42,11 +42,8 @@
  *
  */
 
-void portmap_init_session ( struct oncrpc_session *session ) {
-	oncrpc_init_session ( session, &oncrpc_auth_none,
-                              &oncrpc_auth_none, ONCRPC_PORTMAP,
-                              PORTMAP_VERS );
-}
+/** PORTMAP GETPORT procedure. */
+#define PORTMAP_GETPORT 3
 
 int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
                       uint32_t prog, uint32_t vers, uint32_t prot ) {
