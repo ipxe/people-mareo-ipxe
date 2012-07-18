@@ -363,6 +363,7 @@ static void intel_check_link ( struct net_device *netdev ) {
 static int intel_create_ring ( struct intel_nic *intel,
 			       struct intel_ring *ring ) {
 	physaddr_t address;
+	uint32_t dctl;
 
 	/* Allocate descriptor ring.  Align ring on its own size to
 	 * prevent any possible page-crossing errors due to hardware
@@ -392,6 +393,11 @@ static int intel_create_ring ( struct intel_nic *intel,
 	/* Reset head and tail pointers */
 	writel ( 0, ( intel->regs + ring->reg + INTEL_xDH ) );
 	writel ( 0, ( intel->regs + ring->reg + INTEL_xDT ) );
+
+	/* Enable ring */
+	dctl = readl ( intel->regs + ring->reg + INTEL_xDCTL );
+	dctl |= INTEL_xDCTL_ENABLE;
+	writel ( dctl, intel->regs + ring->reg + INTEL_xDCTL );
 
 	DBGC ( intel, "INTEL %p ring %05x is at [%08llx,%08llx)\n",
 	       intel, ring->reg, ( ( unsigned long long ) address ),
@@ -491,9 +497,6 @@ static int intel_open ( struct net_device *netdev ) {
 	if ( ( rc = intel_create_ring ( intel, &intel->rx ) ) != 0 )
 		goto err_create_rx;
 
-	/* Fill receive ring */
-	intel_refill_rx ( intel );
-
 	/* Program MAC address */
 	memset ( &mac, 0, sizeof ( mac ) );
 	memcpy ( mac.raw, netdev->ll_addr, sizeof ( mac.raw ) );
@@ -514,6 +517,9 @@ static int intel_open ( struct net_device *netdev ) {
 	rctl |= ( INTEL_RCTL_EN | INTEL_RCTL_UPE | INTEL_RCTL_MPE |
 		  INTEL_RCTL_BAM | INTEL_RCTL_BSIZE_2048 | INTEL_RCTL_SECRC );
 	writel ( rctl, intel->regs + INTEL_RCTL );
+
+	/* Fill receive ring */
+	intel_refill_rx ( intel );
 
 	/* Update link state */
 	intel_check_link ( netdev );

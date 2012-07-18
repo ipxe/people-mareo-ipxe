@@ -143,7 +143,7 @@ static unsigned int x509_discard ( void ) {
 }
 
 /** X.509 cache discarder */
-struct cache_discarder x509_cache_discarder __cache_discarder = {
+struct cache_discarder x509_discarder __cache_discarder ( CACHE_NORMAL ) = {
 	.discard = x509_discard,
 };
 
@@ -1264,12 +1264,12 @@ int x509_check_time ( struct x509_certificate *cert, time_t time ) {
 	struct x509_validity *validity = &cert->validity;
 
 	/* Check validity period */
-	if ( time < validity->not_before.time ) {
+	if ( validity->not_before.time > ( time + X509_ERROR_MARGIN_TIME ) ) {
 		DBGC ( cert, "X509 %p \"%s\" is not yet valid (at time %lld)\n",
 		       cert, cert->subject.name, time );
 		return -EACCES_EXPIRED;
 	}
-	if ( time > validity->not_after.time ) {
+	if ( validity->not_after.time < ( time - X509_ERROR_MARGIN_TIME ) ) {
 		DBGC ( cert, "X509 %p \"%s\" has expired (at time %lld)\n",
 		       cert, cert->subject.name, time );
 		return -EACCES_EXPIRED;

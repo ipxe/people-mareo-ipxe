@@ -19,6 +19,7 @@
 FILE_LICENCE ( GPL2_OR_LATER );
 
 #include <stdint.h>
+#include <strings.h>
 #include <errno.h>
 #include <ipxe/malloc.h>
 #include <ipxe/iobuf.h>
@@ -39,27 +40,57 @@ FILE_LICENCE ( GPL2_OR_LATER );
  * @c IOBUF_SIZE.
  */
 struct io_buffer * alloc_iob ( size_t len ) {
-	struct io_buffer *iobuf = NULL;
+	struct io_buffer *iobuf;
+	size_t align;
 	void *data;
 
 	/* Pad to minimum length */
 	if ( len < IOB_ZLEN )
 		len = IOB_ZLEN;
 
-	/* Align buffer length */
-	len = ( len + __alignof__( *iobuf ) - 1 ) &
-		~( __alignof__( *iobuf ) - 1 );
-	
-	/* Allocate memory for buffer plus descriptor */
-	data = malloc_dma ( len + sizeof ( *iobuf ), IOB_ALIGN );
-	if ( ! data )
-		return NULL;
+	/* Align buffer length to ensure that struct io_buffer is aligned */
+	len = ( len + __alignof__ ( *iobuf ) - 1 ) &
+		~( __alignof__ ( *iobuf ) - 1 );
 
-	iobuf = ( struct io_buffer * ) ( data + len );
+	/* Align buffer on its own size to avoid potential problems
+	 * with boundary-crossing DMA.
+	 */
+	align = ( 1 << fls ( len - 1 ) );
+
+	/* Allocate buffer plus descriptor as a single unit, unless
+	 * doing so will push the total size over the alignment
+	 * boundary.
+	 */
+	if ( ( len + sizeof ( *iobuf ) ) <= align ) {
+
+		/* Allocate memory for buffer plus descriptor */
+		data = malloc_dma ( len + sizeof ( *iobuf ), align );
+		if ( ! data )
+			return NULL;
+		iobuf = ( data + len );
+
+	} else {
+
+		/* Allocate memory for buffer */
+		data = malloc_dma ( len, align );
+		if ( ! data )
+			return NULL;
+
+		/* Allocate memory for descriptor */
+		iobuf = malloc ( sizeof ( *iobuf ) );
+		if ( ! iobuf ) {
+			free_dma ( data, len );
+			return NULL;
+		}
+	}
+
+	/* Populate descriptor */
 	iobuf->head = iobuf->data = iobuf->tail = data;
-	iobuf->end = iobuf;
+	iobuf->end = ( data + len );
+
 	return iobuf;
 }
+
 
 /**
  * Free I/O buffer
@@ -67,12 +98,29 @@ struct io_buffer * alloc_iob ( size_t len ) {
  * @v iobuf	I/O buffer
  */
 void free_iob ( struct io_buffer *iobuf ) {
-	if ( iobuf ) {
-		assert ( iobuf->head <= iobuf->data );
-		assert ( iobuf->data <= iobuf->tail );
-		assert ( iobuf->tail <= iobuf->end );
-		free_dma ( iobuf->head,
-			   ( iobuf->end - iobuf->head ) + sizeof ( *iobuf ) );
+	size_t len;
+
+	/* Allow free_iob(NULL) to be valid */
+	if ( ! iobuf )
+		return;
+
+	/* Sanity checks */
+	assert ( iobuf->head <= iobuf->data );
+	assert ( iobuf->data <= iobuf->tail );
+	assert ( iobuf->tail <= iobuf->end );
+
+	/* Free buffer */
+	len = ( iobuf->end - iobuf->head );
+	if ( iobuf->end == iobuf ) {
+
+		/* Descriptor is inline */
+		free_dma ( iobuf->head, ( len + sizeof ( *iobuf ) ) );
+
+	} else {
+
+		/* Descriptor is detached */
+		free_dma ( iobuf->head, len );
+		free ( iobuf );
 	}
 }
 

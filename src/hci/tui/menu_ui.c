@@ -31,6 +31,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #include <ipxe/timer.h>
 #include <ipxe/console.h>
 #include <ipxe/menu.h>
+#include <config/colour.h>
 
 /* Colour pairs */
 #define CPAIR_NORMAL	1
@@ -306,6 +307,7 @@ int show_menu ( struct menu *menu, unsigned int timeout_ms,
 		const char *select, struct menu_item **selected ) {
 	struct menu_item *item;
 	struct menu_ui ui;
+	char buf[ MENU_COLS + 1 /* NUL */ ];
 	int labelled_count = 0;
 	int rc;
 
@@ -339,16 +341,16 @@ int show_menu ( struct menu *menu, unsigned int timeout_ms,
 	/* Initialise screen */
 	initscr();
 	start_color();
-	init_pair ( CPAIR_NORMAL, COLOR_WHITE, COLOR_BLUE );
-	init_pair ( CPAIR_SELECT, COLOR_WHITE, COLOR_RED );
-	init_pair ( CPAIR_SEPARATOR, COLOR_CYAN, COLOR_BLUE );
+	init_pair ( CPAIR_NORMAL, COLOR_NORMAL_FG, COLOR_NORMAL_BG );
+	init_pair ( CPAIR_SELECT, COLOR_SELECT_FG, COLOR_SELECT_BG );
+	init_pair ( CPAIR_SEPARATOR, COLOR_SEPARATOR_FG, COLOR_SEPARATOR_BG );
 	color_set ( CPAIR_NORMAL, NULL );
 	erase();
 
 	/* Draw initial content */
 	attron ( A_BOLD );
-	mvprintw ( TITLE_ROW, ( ( COLS - strlen ( ui.menu->title ) ) / 2 ),
-		   "%s", ui.menu->title );
+	snprintf ( buf, sizeof ( buf ), "%s", ui.menu->title );
+	mvprintw ( TITLE_ROW, ( ( COLS - strlen ( buf ) ) / 2 ), "%s", buf );
 	attroff ( A_BOLD );
 	draw_menu_items ( &ui );
 	draw_menu_item ( &ui, ui.selected );

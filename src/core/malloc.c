@@ -91,9 +91,9 @@ size_t freemem;
 /**
  * Heap size
  *
- * Currently fixed at 128kB.
+ * Currently fixed at 512kB.
  */
-#define HEAP_SIZE ( 128 * 1024 )
+#define HEAP_SIZE ( 512 * 1024 )
 
 /** The heap itself */
 static char heap[HEAP_SIZE] __attribute__ (( aligned ( __alignof__(void *) )));
@@ -192,12 +192,14 @@ static inline void valgrind_make_blocks_noaccess ( void ) {
  */
 static unsigned int discard_cache ( void ) {
 	struct cache_discarder *discarder;
-	unsigned int discarded = 0;
+	unsigned int discarded;
 
 	for_each_table_entry ( discarder, CACHE_DISCARDERS ) {
-		discarded += discarder->discard();
+		discarded = discarder->discard();
+		if ( discarded )
+			return discarded;
 	}
-	return discarded;
+	return 0;
 }
 
 /**
