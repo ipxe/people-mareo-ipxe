@@ -11,32 +11,33 @@
 
 FILE_LICENCE ( GPL2_OR_LATER );
 
-/** NFS MOUNT protocol number. */
+/** NFS MOUNT protocol number */
 #define ONCRPC_MOUNT 100005
-/** NFS MOUNT protocol version. */
+/** NFS MOUNT protocol version */
 #define MOUNT_VERS   3
 
 
-/** No error. */
+/** No error */
 #define MNT3_OK                 0
-/** Not owner. */
+/** Not owner */
 #define MNT3ERR_PERM            1
-/** No such file or directory. */
+/** No such file or directory */
 #define MNT3ERR_NOENT           2
-/** I/O error. */
+/** I/O error */
 #define MNT3ERR_IO              5
-/** Permission denied. */
+/** Permission denied */
 #define MNT3ERR_ACCES           13
-/** Not a directory. */
+/** Not a directory */
 #define MNT3ERR_NOTDIR          20
-/** Invalid argument. */
+/** Invalid argument */
 #define MNT3ERR_INVAL           22
-/** Filename too long. */
+/** Filename too long */
 #define MNT3ERR_NAMETOOLONG     63
-/** Operation not supported. */
+/** Operation not supported */
 #define MNT3ERR_NOTSUPP         10004
-/** A failure on the server. */
+/** A failure on the server */
 #define MNT3ERR_SERVERFAULT     10006
+
 
 /**
  * A MOUNT MNT reply

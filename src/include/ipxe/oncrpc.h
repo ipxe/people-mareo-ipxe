@@ -20,7 +20,10 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define ONCRPC_AUTH_NONE 0
 
 /** ONC RPC System Authentication (also called UNIX Authentication) */
-#define ONCRPC_AUTH_SYS 1
+#define ONCRPC_AUTH_SYS  1
+
+/** Size of an ONC RPC header */
+#define ONCRPC_HEADER_SIZE ( 11 * sizeof ( uint32_t ) )
 
 struct oncrpc_cred {
 	uint32_t               flavor;

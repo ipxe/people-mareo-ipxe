@@ -12,18 +12,21 @@
 
 FILE_LICENCE ( GPL2_OR_LATER );
 
-/** PORTMAP default port. */
+/** PORTMAP default port */
 #define PORTMAP_PORT   111
 
-/** PORTMAP protocol number. */
+/** PORTMAP protocol number */
 #define ONCRPC_PORTMAP 100000
 
-/** PORTMAP version. */
+/** PORTMAP version */
 #define PORTMAP_VERS   2
 
 
+/** TCP protocol number */
 #define PORTMAP_PROTO_TCP 6
+/** UDB protocol number */
 #define PORTMAP_PROTO_UDP 17
+
 
 /**
  * A PORTMAP GETPORT reply
@@ -33,6 +36,7 @@ struct portmap_getport_reply {
 	/** Port returned */
 	uint32_t        port;
 };
+
 
 /**
  * Prepare an ONC RPC session to be used as a PORTMAP session
@@ -49,8 +53,9 @@ static inline void portmap_init_session ( struct oncrpc_session *session,
 	                      ONCRPC_PORTMAP, PORTMAP_VERS );
 }
 
+
 int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
-                      uint32_t prog, uint32_t vers, uint32_t prot );
+                      uint32_t prog, uint32_t vers, uint32_t proto );
 int portmap_get_getport_reply ( struct portmap_getport_reply *getport_reply,
                                 struct oncrpc_reply *reply );
 

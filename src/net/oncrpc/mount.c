@@ -99,7 +99,7 @@ int mount_umnt ( struct interface *intf, struct oncrpc_session *session,
 /**
  * Parse an MNT reply
  *
- * @v mnt_reply         A structure where data will be saved
+ * @v mnt_reply         A structure where the data will be saved
  * @v reply             The ONC RPC reply to get data from
  * @ret rc              Return status code
  */

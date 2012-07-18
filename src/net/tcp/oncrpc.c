@@ -44,8 +44,6 @@
 #define SET_LAST_FRAME( x ) ( (x) | 1 << 31 )
 #define GET_FRAME_SIZE( x ) ( (x) & ~( 1 << 31 ) )
 
-#define ONCRPC_HEADER_SIZE ( 11 * sizeof ( uint32_t ) )
-
 #define ONCRPC_CALL     0
 #define ONCRPC_REPLY    1
 

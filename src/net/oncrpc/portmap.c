@@ -45,8 +45,18 @@
 /** PORTMAP GETPORT procedure. */
 #define PORTMAP_GETPORT 3
 
+/**
+ * Send a GETPORT request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v prog              Program number
+ * @v vers              Program version
+ * @v proto             Protocol (TCP or UDP)
+ * @ret rc              Return status code
+ */
 int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
-                      uint32_t prog, uint32_t vers, uint32_t prot ) {
+                      uint32_t prog, uint32_t vers, uint32_t proto ) {
 	int rc;
 	struct io_buffer *call_buf;
 
@@ -60,7 +70,7 @@ int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
 
 	oncrpc_iob_add_int ( call_buf, prog );
 	oncrpc_iob_add_int ( call_buf, vers );
-	oncrpc_iob_add_int ( call_buf, prot );
+	oncrpc_iob_add_int ( call_buf, proto );
 	oncrpc_iob_add_int ( call_buf, 0 );
 
 	rc = oncrpc_call_iob ( intf, session, PORTMAP_GETPORT, call_buf );
@@ -71,6 +81,13 @@ int portmap_getport ( struct interface *intf, struct oncrpc_session *session,
 	return rc;
 }
 
+/**
+ * Parse a GETPORT reply
+ *
+ * @v getport_reply     A structure where the data will be saved
+ * @v reply             The ONC RPC reply to get data from
+ * @ret rc              Return status code
+ */
 int portmap_get_getport_reply ( struct portmap_getport_reply *getport_reply,
                                 struct oncrpc_reply *reply ) {
 	if ( ! getport_reply || ! reply )

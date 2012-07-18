@@ -41,24 +41,51 @@
  *
  */
 
+/** NFS LOOKUP procedure */
 #define NFS_LOOKUP      3
+/** NFS READ procedure */
 #define NFS_READ        6
 
+/**
+ * Extract a file handle from the beginning of an I/O buffer
+ *
+ * @v io_buf            I/O buffer
+ * @v fh                File handle
+ * @ret size            Size of the data read
+ */
 size_t nfs_iob_get_fh ( struct io_buffer *io_buf, struct nfs_fh *fh ) {
 	fh->size = oncrpc_iob_get_int ( io_buf );
-	oncrpc_iob_get_val ( io_buf, &fh->fh, fh->size );
+	memcpy (fh->fh, io_buf->data, fh->size );
+	iob_pull ( io_buf, fh->size );
 
 	return fh->size + sizeof ( uint32_t );
 }
 
+/**
+ * Add a file handle to the end of an I/O buffer
+ *
+ * @v io_buf            I/O buffer
+ * @v fh                File handle
+ * @ret size            Size of the data written
+ */
 size_t nfs_iob_add_fh ( struct io_buffer *io_buf, const struct nfs_fh *fh ) {
-	size_t s = 0;
-	s += oncrpc_iob_add_int ( io_buf, fh->size );
-	s += oncrpc_iob_add_val ( io_buf, &fh->fh, fh->size );
+	size_t s;
 
-	return s;
+	s = oncrpc_iob_add_int ( io_buf, fh->size );
+	memcpy ( iob_put ( io_buf, fh->size ), &fh->fh, fh->size );
+
+	return s + fh->size;
 }
 
+/**
+ * Send a LOOKUP request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v fh                The file handle of the the directory
+ * @v filename          The file name
+ * @ret rc              Return status code
+ */
 int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
                  const struct nfs_fh *fh, const char *filename ) {
 	int              rc;
@@ -79,6 +106,16 @@ int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
 	return rc;
 }
 
+/**
+ * Send a READ request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v fh                The file handle
+ * @v offset            Offset
+ * @v count             Byte count
+ * @ret rc              Return status code
+ */
 int nfs_read ( struct interface *intf, struct oncrpc_session *session,
                const struct nfs_fh *fh, uint64_t offset, uint32_t count ) {
 	int              rc;
@@ -100,6 +137,13 @@ int nfs_read ( struct interface *intf, struct oncrpc_session *session,
 	return rc;
 }
 
+/**
+ * Parse a LOOKUP reply
+ *
+ * @v lookup_reply      A structure where the data will be saved
+ * @v reply             The ONC RPC reply to get data from
+ * @ret rc              Return status code
+ */
 int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
                            struct oncrpc_reply *reply ) {
 	if ( ! lookup_reply || ! reply )
@@ -134,6 +178,13 @@ int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
 	return 0;
 }
 
+/**
+ * Parse a READ reply
+ *
+ * @v read_reply        A structure where the data will be saved
+ * @v reply             The ONC RPC reply to get data from
+ * @ret rc              Return status code
+ */
 int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
                          struct oncrpc_reply *reply ) {
 	if ( ! read_reply || ! reply )
