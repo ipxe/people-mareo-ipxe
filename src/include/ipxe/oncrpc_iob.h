@@ -18,6 +18,13 @@ FILE_LICENCE ( GPL2_OR_LATER );
 /** Enusure that size is a multiple of four */
 #define oncrpc_align( size ) ( ( ( ( (size) - 1 ) >> 2 ) + 1 ) << 2 )
 
+/**
+ * Get a 32 bits integer from the beginning of an I/O buffer
+ *
+ * @v buf               I/O buffer
+ * @ret int             Integer
+ */
+
 #define oncrpc_iob_get_int( buf ) \
 ( { \
 	uint32_t *_val; \
@@ -26,6 +33,12 @@ FILE_LICENCE ( GPL2_OR_LATER );
 	ntohl ( *_val ); \
 } )
 
+/**
+ * Get a 64 bits integer from the beginning of an I/O buffer
+ *
+ * @v buf               I/O buffer
+ * @ret int             Integer
+ */
 #define oncrpc_iob_get_int64( buf ) \
 ( { \
 	uint64_t *_val; \
@@ -38,7 +51,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
  * Calculate the length of a string, including padding bytes.
  *
  * @v str               String
- * @ret size            Length of the string
+ * @ret size            Length of the padded string
  */
 #define oncrpc_strlen( str ) ( oncrpc_align ( strlen ( str ) ) + \
                                sizeof ( uint32_t ) )

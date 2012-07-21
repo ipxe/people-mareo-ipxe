@@ -50,8 +50,8 @@
  *
  * @v intf              Interface to send the request on
  * @v session           ONC RPC session
- * @v prog              Program number
- * @v vers              Program version
+ * @v prog              ONC RPC program number
+ * @v vers              ONC RPC rogram version number
  * @v proto             Protocol (TCP or UDP)
  * @ret rc              Return status code
  */
