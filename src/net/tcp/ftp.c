@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2007 Michael Brown <mbrown@fensystems.co.uk>.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of the
+ * License, or any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -230,9 +248,20 @@ static void ftp_reply ( struct ftp_request *ftp ) {
 	if ( separator != ' ' )
 		return;
 
-	/* Ignore "intermediate" responses (1xx codes) */
 	if ( status_major == '1' )
+	{
+		/* Parse file size */
+		if ( ftp->state == FTP_RETR ) {
+			size_t filesize;
+			char *ptr = ftp->passive_text;
+
+			filesize = strtoull ( ptr, NULL, 10 );
+			xfer_seek ( &ftp->xfer, filesize );
+			xfer_seek ( &ftp->xfer, 0 );
+		}
+
 		return;
+	}
 
 	/* Anything other than success (2xx) or, in the case of a
 	 * repsonse to a "USER" command, a password prompt (3xx), is a
@@ -270,7 +299,6 @@ static void ftp_reply ( struct ftp_request *ftp ) {
 
 	/* Move to next state and send control string */
 	ftp_next_state ( ftp );
-	
 }
 
 /**
@@ -292,7 +320,7 @@ static int ftp_control_deliver ( struct ftp_request *ftp,
 	char *recvbuf = ftp->recvbuf;
 	size_t recvsize = ftp->recvsize;
 	char c;
-	
+
 	while ( len-- ) {
 		c = *(data++);
 		switch ( c ) {
@@ -302,7 +330,7 @@ static int ftp_control_deliver ( struct ftp_request *ftp,
 			 * completed reply.  Avoid calling ftp_reply()
 			 * twice if we receive both \r and \n.
 			 */
-			if ( recvsize == 0 )
+			if ( recvbuf != ftp->status_text )
 				ftp_reply ( ftp );
 			/* Start filling up the status code buffer */
 			recvbuf = ftp->status_text;
@@ -369,7 +397,7 @@ static void ftp_data_closed ( struct ftp_request *ftp, int rc ) {
 
 	DBGC ( ftp, "FTP %p data connection closed: %s\n",
 	       ftp, strerror ( rc ) );
-	
+
 	/* If there was an error, close control channel and record status */
 	if ( rc ) {
 		ftp_done ( ftp, rc );
