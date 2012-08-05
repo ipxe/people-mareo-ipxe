@@ -61,8 +61,7 @@ struct oncrpc_session {
 
 extern struct oncrpc_cred oncrpc_auth_none;
 
-void oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys, uint32_t uid,
-                            uint32_t gid, char *hostname );
+int oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys );
 void oncrpc_init_session ( struct oncrpc_session *session,
                            struct oncrpc_cred *credential,
                            struct oncrpc_cred *verifier, uint32_t prog_name,

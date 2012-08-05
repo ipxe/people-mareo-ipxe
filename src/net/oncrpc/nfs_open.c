@@ -40,7 +40,6 @@
 #include <ipxe/oncrpc_iob.h>
 #include <ipxe/portmap.h>
 #include <ipxe/mount.h>
-#include <ipxe/settings.h>
 
 /** @file
  *
@@ -99,13 +98,12 @@ struct nfs_request {
 
 	struct oncrpc_cred_sys  auth_sys;
 
+	char *                  hostname;
 	char *                  mountpoint;
 	char *                  filename;
+
 	struct nfs_fh           current_fh;
 	uint64_t                file_offset;
-
-	/** URI being fetched */
-	struct uri              *uri;
 };
 
 static void nfs_step ( struct nfs_request *nfs );
@@ -121,11 +119,9 @@ static void nfs_free ( struct refcnt *refcnt ) {
 	nfs = container_of ( refcnt, struct nfs_request, refcnt );
 	DBGC ( nfs, "NFS_OPEN %p freed\n", nfs );
 
-	free ( nfs->mountpoint );
+	free ( nfs->hostname );
 	free ( nfs->auth_sys.hostname );
-	uri_put ( nfs->uri );
 
-	/* Causes segfault for a reason yet to be discovered. */
 	free ( nfs );
 }
 
@@ -232,7 +228,7 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 			goto err;
 
 		rc = nfs_connect ( &nfs->mount_intf, getport_reply.port,
-	                           nfs->uri->host );
+	                           nfs->hostname );
 		if ( rc != 0 )
 			goto err;
 
@@ -250,7 +246,7 @@ static int nfs_pm_deliver ( struct nfs_request *nfs,
 			goto err;
 
 		rc = nfs_connect ( &nfs->nfs_intf, getport_reply.port,
-	                           nfs->uri->host );
+	                           nfs->hostname );
 		if ( rc != 0 )
 			goto err;
 
@@ -501,6 +497,50 @@ static struct interface_descriptor nfs_desc =
  *
  */
 
+static int nfs_parse_uri ( struct nfs_request *nfs, const struct uri *uri ) {
+	char                    *str;
+
+	DBGC ( nfs, "NFS_OPEN %p parsing uri (%s)\n", nfs, uri->opaque );
+	if ( ! uri_has_opaque ( uri ) )
+		return -EINVAL;
+
+	str = strdup ( uri->opaque );
+	if ( ! str )
+		return -ENOMEM;
+
+	nfs->hostname   = str;
+	nfs->mountpoint = NULL;
+	nfs->filename   = NULL;
+
+	while ( *str != '\0' ) {
+		if ( *str == ':' ) {
+			*str = '\0';
+			if ( nfs->mountpoint == NULL )
+				nfs->mountpoint = str + 1;
+			else if ( nfs->filename == NULL )
+				nfs->filename = str + 1;
+			else
+				goto err;
+		}
+
+		str++;
+	}
+
+	if ( nfs->hostname == NULL || *nfs->hostname == '\0' )
+		goto err;
+
+	if ( nfs->mountpoint == NULL || *nfs->hostname == '\0' )
+		goto err;
+
+	if ( nfs->filename == NULL || *nfs->hostname == '\0' )
+		goto err;
+
+	return 0;
+err:
+	free ( nfs->hostname );
+	nfs->hostname = NULL;
+	return -EINVAL;
+}
 
 /**
  * Initiate a NFS connection
@@ -511,53 +551,31 @@ static struct interface_descriptor nfs_desc =
  */
 static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	int                     rc;
-	char                    *hostname;
 	struct nfs_request      *nfs;
-
-	/* Sanity checks */
-	if ( ! uri->path || ! uri->host )
-		return -EINVAL;
 
 	nfs = zalloc ( sizeof ( *nfs ) );
 	if ( ! nfs )
 		return -ENOMEM;
 
-	fetch_string_setting_copy ( NULL, &hostname_setting,
-	                            &hostname );
-	if ( ! hostname )
-		hostname = strdup ( "iPXE" );
-
-	if ( ! hostname )
-	{
-		rc = -ENOMEM;
+	rc = oncrpc_init_cred_sys ( &nfs->auth_sys );
+	if ( rc != 0 )
 		goto err_hostname;
-	}
 
-	oncrpc_init_cred_sys ( &nfs->auth_sys, 0, 0, hostname );
-
-	nfs->mountpoint = strdup ( uri->path );
-	if ( ! nfs->mountpoint )
-	{
-		rc = -ENOMEM;
-		goto err_mountpoint;
-	}
+	rc = nfs_parse_uri ( nfs, uri );
+	if ( rc != 0 )
+		goto err_rootpath;
 
 	ref_init ( &nfs->refcnt, nfs_free );
 	intf_init ( &nfs->xfer, &nfs_xfer_desc, &nfs->refcnt );
 	intf_init ( &nfs->pm_intf, &nfs_pm_desc, &nfs->refcnt );
 	intf_init ( &nfs->mount_intf, &nfs_mount_desc, &nfs->refcnt );
 	intf_init ( &nfs->nfs_intf, &nfs_desc, &nfs->refcnt );
-	nfs->uri = uri_get ( uri );
 
 	portmap_init_session ( &nfs->pm_session, &nfs->auth_sys.credential );
 	mount_init_session ( &nfs->mount_session, &nfs->auth_sys.credential );
 	nfs_init_session ( &nfs->nfs_session, &nfs->auth_sys.credential );
 
-	nfs->filename   = basename ( nfs->mountpoint );
-	nfs->mountpoint = dirname ( nfs->mountpoint );
-
-	rc = nfs_connect ( &nfs->pm_intf, uri_port ( uri, PORTMAP_PORT ),
-	                   uri->host );
+	rc = nfs_connect ( &nfs->pm_intf, PORTMAP_PORT, nfs->hostname );
 	if ( rc != 0 )
 		goto err_connect;
 
@@ -568,8 +586,8 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	return 0;
 
 err_connect:
-err_mountpoint:
-	free ( hostname );
+err_rootpath:
+	free ( nfs->auth_sys.hostname );
 err_hostname:
 	free ( nfs );
 	return rc;

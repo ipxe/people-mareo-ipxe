@@ -34,6 +34,8 @@
 #include <ipxe/features.h>
 #include <ipxe/oncrpc.h>
 #include <ipxe/oncrpc_iob.h>
+#include <ipxe/init.h>
+#include <ipxe/settings.h>
 
 /** @file
  *
@@ -54,24 +56,52 @@ struct oncrpc_cred oncrpc_auth_none = {
 	.length = 0
 };
 
+#define DHCP_EB_UID DHCP_ENCAP_OPT ( DHCP_EB_ENCAP, 0xc2 )
+#define DHCP_EB_GID DHCP_ENCAP_OPT ( DHCP_EB_ENCAP, 0xc3 )
+
+struct setting uid_setting __setting ( SETTING_AUTH ) = {
+	.name        = "uid",
+	.description = "UID",
+	.tag         = DHCP_EB_UID,
+	.type        = &setting_type_uint32
+};
+
+struct setting gid_setting __setting ( SETTING_AUTH ) = {
+	.name        = "gid",
+	.description = "GID",
+	.tag         = DHCP_EB_GID,
+	.type        = &setting_type_uint32
+};
+
 /**
  * Initialize an ONC RPC AUTH SYS credential structure
  *
  * @v auth_sys          The structure to initialize
- * @v uid               UID
- * @v gid               GID
- * @v hostname          Hostname
+ *
+ * The hostname field is filled with the value of the hostname setting, if the
+ * hostname setting is empty, "iPXE" is used instead.
  */
-void oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys, uint32_t uid,
-                            uint32_t gid, char *hostname ) {
-	auth_sys->hostname    = hostname;
-	auth_sys->uid         = uid;
-	auth_sys->gid         = gid;
+int oncrpc_init_cred_sys ( struct oncrpc_cred_sys *auth_sys ) {
+	if ( ! auth_sys )
+		return -EINVAL;
+
+	fetch_string_setting_copy ( NULL, &hostname_setting,
+	                            &auth_sys->hostname );
+	if ( ! auth_sys->hostname )
+		auth_sys->hostname = strdup ( "iPXE" );
+
+	if ( ! auth_sys->hostname )
+		return -ENOMEM;
+
+	auth_sys->uid         = fetch_uintz_setting ( NULL, &uid_setting );
+	auth_sys->gid         = fetch_uintz_setting ( NULL, &uid_setting );
 	auth_sys->aux_gid_len = 0;
 	auth_sys->stamp       = 0;
 
 	auth_sys->credential.flavor = ONCRPC_AUTH_SYS;
-	auth_sys->credential.length = 16 + oncrpc_strlen ( hostname );
+	auth_sys->credential.length = 16 + oncrpc_strlen ( auth_sys->hostname );
+
+	return 0;
 }
 
 /**

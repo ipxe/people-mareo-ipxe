@@ -109,7 +109,7 @@ enum {
  * Note that this is a separate concept from a URI with an absolute
  * path.
  */
-static inline int uri_is_absolute ( struct uri *uri ) {
+static inline int uri_is_absolute ( const struct uri *uri ) {
 	return ( uri->scheme != NULL );
 }
 
@@ -119,7 +119,7 @@ static inline int uri_is_absolute ( struct uri *uri ) {
  * @v uri			URI
  * @ret has_opaque		URI has an opaque part
  */
-static inline int uri_has_opaque ( struct uri *uri ) {
+static inline int uri_has_opaque ( const struct uri *uri ) {
 	return ( uri->opaque && ( uri->opaque[0] != '\0' ) );
 
 }
@@ -129,7 +129,7 @@ static inline int uri_has_opaque ( struct uri *uri ) {
  * @v uri			URI
  * @ret has_path		URI has a path
  */
-static inline int uri_has_path ( struct uri *uri ) {
+static inline int uri_has_path ( const struct uri *uri ) {
 	return ( uri->path && ( uri->path[0] != '\0' ) );
 }
 
@@ -143,7 +143,7 @@ static inline int uri_has_path ( struct uri *uri ) {
  * concept from an absolute URI.  Note also that a URI may not have a
  * path at all.
  */
-static inline int uri_has_absolute_path ( struct uri *uri ) {
+static inline int uri_has_absolute_path ( const struct uri *uri ) {
 	return ( uri->path && ( uri->path[0] == '/' ) );
 }
 
@@ -157,7 +157,7 @@ static inline int uri_has_absolute_path ( struct uri *uri ) {
  * this is a separate concept from a relative URI.  Note also that a
  * URI may not have a path at all.
  */
-static inline int uri_has_relative_path ( struct uri *uri ) {
+static inline int uri_has_relative_path ( const struct uri *uri ) {
 	return ( uri->path && ( uri->path[0] != '/' ) );
 }
 
