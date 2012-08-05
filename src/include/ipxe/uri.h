@@ -114,6 +114,16 @@ static inline int uri_is_absolute ( struct uri *uri ) {
 }
 
 /**
+ * URI has an opaque part
+ *
+ * @v uri			URI
+ * @ret has_opaque		URI has an opaque part
+ */
+static inline int uri_has_opaque ( struct uri *uri ) {
+	return ( uri->opaque && ( uri->opaque[0] != '\0' ) );
+
+}
+/**
  * URI has a path
  *
  * @v uri			URI
