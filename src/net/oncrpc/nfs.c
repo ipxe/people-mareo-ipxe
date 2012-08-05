@@ -44,6 +44,8 @@
 
 /** NFS LOOKUP procedure */
 #define NFS_LOOKUP      3
+/** NFS READLINK procedure */
+#define NFS_READLINK    5
 /** NFS READ procedure */
 #define NFS_READ        6
 
@@ -108,6 +110,32 @@ int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
 }
 
 /**
+ * Send a READLINK request
+ *
+ * @v intf              Interface to send the request on
+ * @v session           ONC RPC session
+ * @v fh                The symlink file handle
+ * @ret rc              Return status code
+ */
+int nfs_readlink ( struct interface *intf, struct oncrpc_session *session,
+                   const struct nfs_fh *fh ) {
+	int              rc;
+	struct io_buffer *io_buf;
+
+	io_buf = oncrpc_alloc_iob ( session,  fh->size + sizeof ( uint32_t ) );
+	if ( ! io_buf )
+		return -ENOBUFS;
+
+	nfs_iob_add_fh ( io_buf, fh );
+
+	rc = oncrpc_call_iob ( intf, session, NFS_READLINK, io_buf );
+	if ( rc != 0 )
+		free_iob ( io_buf );
+
+	return rc;
+}
+
+/**
  * Send a READ request
  *
  * @v intf              Interface to send the request on
@@ -123,7 +151,7 @@ int nfs_read ( struct interface *intf, struct oncrpc_session *session,
 	struct io_buffer *io_buf;
 
 	io_buf = oncrpc_alloc_iob ( session,  fh->size + sizeof ( uint64_t ) +
-	                                      sizeof ( uint64_t ) );
+	                                      2 * sizeof ( uint32_t ) );
 	if ( ! io_buf )
 		return -ENOBUFS;
 
@@ -176,6 +204,50 @@ int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
 
 	nfs_iob_get_fh ( reply->data, &lookup_reply->fh );
 
+	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
+		lookup_reply->ent_type = oncrpc_iob_get_int ( reply->data );
+
+	return 0;
+}
+/**
+ * Parse a READLINK reply
+ *
+ * @v readlink_reply    A structure where the data will be saved
+ * @v reply             The ONC RPC reply to get data from
+ * @ret rc              Return status code
+ */
+int nfs_get_readlink_reply ( struct nfs_readlink_reply *readlink_reply,
+                             struct oncrpc_reply *reply ) {
+	if ( ! readlink_reply || ! reply )
+		return -EINVAL;
+
+	readlink_reply->status = oncrpc_iob_get_int ( reply->data );
+	switch ( readlink_reply->status )
+	{
+	case NFS3_OK:
+		 break;
+	case NFS3ERR_IO:
+		return -EIO;
+	case NFS3ERR_ACCES:
+		return -EACCES;
+	case NFS3ERR_INVAL:
+		return -EINVAL;
+	case NFS3ERR_NOTSUPP:
+		return -ENOTSUP;
+	case NFS3ERR_STALE:
+	case NFS3ERR_BADHANDLE:
+	case NFS3ERR_SERVERFAULT:
+	default:
+		return -EPROTO;
+	}
+
+	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
+		iob_pull ( reply->data, 5 * sizeof ( uint32_t ) +
+		                        8 * sizeof ( uint64_t ) );
+
+	readlink_reply->path_len = oncrpc_iob_get_int ( reply->data );
+	readlink_reply->path     = reply->data->data;
+
 	return 0;
 }
 
@@ -217,9 +289,9 @@ int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
 
 	if ( oncrpc_iob_get_int ( reply->data ) == 1 )
 	{
-		iob_pull ( reply->data, 5 * sizeof ( uint32_t ));
+		iob_pull ( reply->data, 5 * sizeof ( uint32_t ) );
 		read_reply->filesize = oncrpc_iob_get_int64 ( reply->data );
-		iob_pull ( reply->data, 7 * sizeof ( uint64_t ));
+		iob_pull ( reply->data, 7 * sizeof ( uint64_t ) );
 	}
 
 	read_reply->count    = oncrpc_iob_get_int ( reply->data );
@@ -232,3 +304,4 @@ int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
 
 	return 0;
 }
+

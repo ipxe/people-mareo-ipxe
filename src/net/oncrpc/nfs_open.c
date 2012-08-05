@@ -69,6 +69,8 @@ enum nfs_state {
 	NFS_NONE = 0,
 	NFS_LOOKUP,
 	NFS_LOOKUP_SENT,
+	NFS_READLINK,
+	NFS_READLINK_SENT,
 	NFS_READ,
 	NFS_READ_SENT,
 	NFS_CLOSED,
@@ -101,7 +103,9 @@ struct nfs_request {
 	char *                  hostname;
 	char *                  mountpoint;
 	char *                  filename;
+	size_t                  filename_offset;
 
+	struct nfs_fh           readlink_fh;
 	struct nfs_fh           current_fh;
 	uint64_t                file_offset;
 };
@@ -120,8 +124,8 @@ static void nfs_free ( struct refcnt *refcnt ) {
 	DBGC ( nfs, "NFS_OPEN %p freed\n", nfs );
 
 	free ( nfs->hostname );
+	free ( nfs->filename - nfs->filename_offset );
 	free ( nfs->auth_sys.hostname );
-
 	free ( nfs );
 }
 
@@ -271,7 +275,8 @@ static void nfs_mount_step ( struct nfs_request *nfs ) {
 		return;
 
 	if ( nfs->mount_state == NFS_MOUNT_NONE ) {
-		DBGC ( nfs, "NFS_OPEN %p MNT call\n", nfs );
+		DBGC ( nfs, "NFS_OPEN %p MNT call (%s)\n", nfs,
+		       nfs->mountpoint );
 
 		rc = mount_mnt ( &nfs->mount_intf, &nfs->mount_session,
 		                 nfs->mountpoint );
@@ -342,15 +347,43 @@ done:
 
 static void nfs_step ( struct nfs_request *nfs ) {
 	int     rc;
+	char    *path_component = NULL;
 
 	if ( ! xfer_window ( &nfs->nfs_intf ) )
 		return;
 
 	if ( nfs->nfs_state == NFS_LOOKUP ) {
-		DBGC ( nfs, "NFS_OPEN %p LOOKUP call\n", nfs );
+		while ( path_component == NULL || path_component[0] == '\0') {
+			path_component = nfs->filename;
+			while ( *nfs->filename != '\0' ) {
+				nfs->filename_offset++;
+				if ( *nfs->filename++ == '/' ) {
+					*(nfs->filename - 1) = '\0';
+					break;
+				}
+			}
+		}
+
+		DBGC ( nfs, "NFS_OPEN %p LOOKUP call (%s)\n", nfs,
+                       path_component );
 
 		rc = nfs_lookup ( &nfs->nfs_intf, &nfs->nfs_session,
-		                  &nfs->current_fh, nfs->filename );
+		                  &nfs->current_fh, path_component );
+		if ( rc == -EAGAIN )
+			return;
+		if ( rc != 0 )
+			goto err;
+
+		nfs->nfs_state++;
+		return;
+	}
+
+
+	if ( nfs->nfs_state == NFS_READLINK ) {
+		DBGC ( nfs, "NFS_OPEN %p READLINK call\n", nfs );
+
+		rc = nfs_readlink ( &nfs->nfs_intf, &nfs->nfs_session,
+		                    &nfs->readlink_fh );
 		if ( rc == -EAGAIN )
 			return;
 		if ( rc != 0 )
@@ -385,31 +418,80 @@ static int nfs_deliver ( struct nfs_request *nfs,
                          struct xfer_metadata *meta __unused ) {
 	int                     rc;
 	struct oncrpc_reply     reply;
-	struct nfs_read_reply   read_reply;
-	struct nfs_lookup_reply lookup_reply;
 
 	oncrpc_get_reply ( &nfs->nfs_session, &reply, io_buf );
-	if ( reply.accept_state != 0 )
-	{
+	if ( reply.accept_state != 0 ) {
 		rc = -EPROTO;
 		goto err;
 	}
 
 	if ( nfs->nfs_state == NFS_LOOKUP_SENT ) {
+		struct nfs_lookup_reply lookup_reply;
+
 		DBGC ( nfs, "NFS_OPEN %p got LOOKUP reply\n", nfs );
 
 		rc = nfs_get_lookup_reply ( &lookup_reply, &reply );
 		if ( rc != 0 )
 			goto err;
 
-		nfs->current_fh = lookup_reply.fh;
-		nfs->nfs_state++;
-		nfs_step ( nfs );
+		if ( lookup_reply.ent_type == NFS_ATTR_SYMLINK ) {
+			nfs->readlink_fh = lookup_reply.fh;
+			nfs->nfs_state = NFS_READLINK;
+		} else {
+			nfs->current_fh = lookup_reply.fh;
 
+			if ( nfs->filename[0] == '\0' )
+				nfs->nfs_state = NFS_READ;
+			else
+				nfs->nfs_state--;
+		}
+
+		nfs_step ( nfs );
+		goto done;
+	}
+
+	if ( nfs->nfs_state == NFS_READLINK_SENT ) {
+		char                      *new_filename;
+		struct nfs_readlink_reply readlink_reply;
+
+		DBGC ( nfs, "NFS_OPEN %p got READLINK reply\n", nfs );
+
+		rc = nfs_get_readlink_reply ( &readlink_reply, &reply );
+		if ( rc != 0 )
+			goto err;
+
+		if ( readlink_reply.path_len == 0 ||
+		     readlink_reply.path[0] == '/' )
+			return -EINVAL;
+
+		new_filename = malloc ( readlink_reply.path_len +
+		                        strlen ( nfs->filename ) + 2 );
+		if ( ! new_filename ) {
+			rc = -ENOMEM;
+			goto err;
+		}
+
+		memcpy ( new_filename, readlink_reply.path,
+		         readlink_reply.path_len );
+		strcpy ( new_filename + readlink_reply.path_len + 1,
+		         nfs->filename );
+		new_filename[readlink_reply.path_len] = '/';
+
+		free ( nfs->filename - nfs->filename_offset );
+		nfs->filename = new_filename;
+		nfs->filename_offset = 0;
+
+		DBGC ( nfs, "NFS_OPEN %p new filename: %s\n", nfs,
+		       nfs->filename );
+
+		nfs->nfs_state = NFS_LOOKUP;
+		nfs_step ( nfs );
 		goto done;
 	}
 
 	if ( nfs->nfs_state == NFS_READ_SENT ) {
+		struct nfs_read_reply read_reply;
+
 		DBGC ( nfs, "NFS_OPEN %p got READ reply\n", nfs );
 
 		rc = nfs_get_read_reply ( &read_reply, &reply );
@@ -498,10 +580,11 @@ static struct interface_descriptor nfs_desc =
  */
 
 static int nfs_parse_uri ( struct nfs_request *nfs, const struct uri *uri ) {
-	char                    *str;
+	int     rc;
+	char    *str;
 
 	DBGC ( nfs, "NFS_OPEN %p parsing uri (%s)\n", nfs, uri->opaque );
-	if ( ! uri_has_opaque ( uri ) )
+	if ( ! uri || ! uri_has_opaque ( uri ) )
 		return -EINVAL;
 
 	str = strdup ( uri->opaque );
@@ -535,11 +618,19 @@ static int nfs_parse_uri ( struct nfs_request *nfs, const struct uri *uri ) {
 	if ( nfs->filename == NULL || *nfs->hostname == '\0' )
 		goto err;
 
+	nfs->filename = strdup ( nfs->filename );
+	if ( ! nfs->filename ) {
+		rc = -ENOMEM;
+		goto err_filename;
+	}
+
 	return 0;
 err:
+	rc = -EINVAL;
+err_filename:
 	free ( nfs->hostname );
 	nfs->hostname = NULL;
-	return -EINVAL;
+	return rc;
 }
 
 /**
@@ -550,20 +641,20 @@ err:
  * @ret rc		Return status code
  */
 static int nfs_open ( struct interface *xfer, struct uri *uri ) {
-	int                     rc;
+	int     rc;
 	struct nfs_request      *nfs;
 
 	nfs = zalloc ( sizeof ( *nfs ) );
 	if ( ! nfs )
 		return -ENOMEM;
 
+	rc = nfs_parse_uri ( nfs, uri );
+	if ( rc != 0 )
+		goto err_uri;
+
 	rc = oncrpc_init_cred_sys ( &nfs->auth_sys );
 	if ( rc != 0 )
 		goto err_hostname;
-
-	rc = nfs_parse_uri ( nfs, uri );
-	if ( rc != 0 )
-		goto err_rootpath;
 
 	ref_init ( &nfs->refcnt, nfs_free );
 	intf_init ( &nfs->xfer, &nfs_xfer_desc, &nfs->refcnt );
@@ -586,9 +677,9 @@ static int nfs_open ( struct interface *xfer, struct uri *uri ) {
 	return 0;
 
 err_connect:
-err_rootpath:
 	free ( nfs->auth_sys.hostname );
 err_hostname:
+err_uri:
 	free ( nfs );
 	return rc;
 }

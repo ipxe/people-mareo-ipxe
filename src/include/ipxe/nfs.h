@@ -63,6 +63,10 @@ FILE_LICENCE ( GPL2_OR_LATER );
  * timely fashion */
 #define NFS3ERR_JUKEBOX     10008
 
+enum nfs_attr_type {
+	NFS_ATTR_SYMLINK = 5,
+};
+
 /**
  * A NFS file handle
  *
@@ -79,9 +83,25 @@ struct nfs_fh {
 struct nfs_lookup_reply {
 	/** Reply status */
 	uint32_t             status;
+	/** Entity type */
+	enum nfs_attr_type   ent_type;
 	/** File handle */
 	struct nfs_fh        fh;
 };
+
+/**
+ * A NFS READLINK reply
+ *
+ */
+struct nfs_readlink_reply {
+	/** Reply status */
+	uint32_t             status;
+	/** File path length */
+	uint32_t             path_len;
+	/** File path */
+	char                 *path;
+};
+
 
 /**
  * A NFS READ reply
@@ -96,7 +116,7 @@ struct nfs_read_reply {
 	uint32_t             count;
 	/** End-of-File indicator */
 	uint32_t             eof;
-	/** Data read length */
+	/** Data length */
 	uint32_t             data_len;
 	/** Data read */
 	void                 *data;
@@ -122,11 +142,15 @@ static inline void nfs_init_session ( struct oncrpc_session *session,
 
 int nfs_lookup ( struct interface *intf, struct oncrpc_session *session,
                  const struct nfs_fh *fh, const char *filename );
+int nfs_readlink ( struct interface *intf, struct oncrpc_session *session,
+                   const struct nfs_fh *fh );
 int nfs_read ( struct interface *intf, struct oncrpc_session *session,
                const struct nfs_fh *fh, uint64_t offset, uint32_t count );
 
 int nfs_get_lookup_reply ( struct nfs_lookup_reply *lookup_reply,
                            struct oncrpc_reply *reply );
+int nfs_get_readlink_reply ( struct nfs_readlink_reply *readlink_reply,
+                             struct oncrpc_reply *reply );
 int nfs_get_read_reply ( struct nfs_read_reply *read_reply,
                          struct oncrpc_reply *reply );
 
