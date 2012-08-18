@@ -60,9 +60,6 @@ FILE_LICENCE ( GPL2_OR_LATER );
 #define EIO_CONTENT_LENGTH __einfo_error ( EINFO_EIO_CONTENT_LENGTH )
 #define EINFO_EIO_CONTENT_LENGTH \
 	__einfo_uniqify ( EINFO_EIO, 0x02, "Content length mismatch" )
-#define EIO_CHUNK __einfo_error ( EINFO_EIO_CHUNK )
-#define EINFO_EIO_CHUNK \
-	__einfo_uniqify ( EINFO_EIO, 0x03, "Terminated mid-chunk" )
 #define EINVAL_RESPONSE __einfo_error ( EINFO_EINVAL_RESPONSE )
 #define EINFO_EINVAL_RESPONSE \
 	__einfo_uniqify ( EINFO_EINVAL, 0x01, "Invalid content length" )
@@ -111,7 +108,14 @@ enum http_rx_state {
 	HTTP_RX_RESPONSE = 0,
 	HTTP_RX_HEADER,
 	HTTP_RX_CHUNK_LEN,
+	/* In HTTP_RX_DATA, it is acceptable for the server to close
+	 * the connection (unless we are in the middle of a chunked
+	 * transfer).
+	 */
 	HTTP_RX_DATA,
+	/* In the following states, it is acceptable for the server to
+	 * close the connection.
+	 */
 	HTTP_RX_TRAILER,
 	HTTP_RX_IDLE,
 	HTTP_RX_DEAD,
@@ -251,10 +255,14 @@ static int http_socket_open ( struct http_request *http ) {
 static void http_done ( struct http_request *http ) {
 	int rc;
 
-	/* If we are in the middle of a chunked transfer, force an error */
-	if ( http->chunked ) {
-		DBGC ( http, "HTTP %p terminated mid-chunk\n", http );
-		http_close ( http, -EIO_CHUNK );
+	/* If we are not at an appropriate stage of the protocol
+	 * (including being in the middle of a chunked transfer),
+	 * force an error.
+	 */
+	if ( ( http->rx_state < HTTP_RX_DATA ) || ( http->chunked != 0 ) ) {
+		DBGC ( http, "HTTP %p connection closed unexpectedly in state "
+		       "%d\n", http, http->rx_state );
+		http_close ( http, -ECONNRESET );
 		return;
 	}
 
@@ -354,8 +362,9 @@ static int http_rx_response ( struct http_request *http, char *response ) {
 		return -EINVAL_RESPONSE;
 	http->code = strtoul ( spc, NULL, 10 );
 
-	/* Move to received headers */
-	http->rx_state = HTTP_RX_HEADER;
+	/* Move to receive headers */
+	http->rx_state = ( ( http->flags & HTTP_HEAD_ONLY ) ?
+			   HTTP_RX_TRAILER : HTTP_RX_HEADER );
 	return 0;
 }
 
@@ -689,8 +698,7 @@ static int http_rx_header ( struct http_request *http, char *header ) {
 		}
 
 		/* Move to next state */
-		if ( ( http->rx_state == HTTP_RX_HEADER ) &&
-		     ( ! ( http->flags & HTTP_HEAD_ONLY ) ) ) {
+		if ( http->rx_state == HTTP_RX_HEADER ) {
 			DBGC ( http, "HTTP %p start of data\n", http );
 			http->rx_state = ( http->chunked ?
 					   HTTP_RX_CHUNK_LEN : HTTP_RX_DATA );
