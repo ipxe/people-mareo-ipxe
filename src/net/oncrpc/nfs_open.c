@@ -460,9 +460,27 @@ static int nfs_deliver ( struct nfs_request *nfs,
 		if ( rc != 0 )
 			goto err;
 
-		if ( readlink_reply.path_len == 0 ||
-		     readlink_reply.path[0] == '/' )
+		if ( readlink_reply.path_len == 0 )
 			return -EINVAL;
+
+		if ( readlink_reply.path[0] == '/' ) {
+			if ( strncmp ( readlink_reply.path, nfs->mountpoint,
+			               strlen ( nfs->mountpoint ) ) != 0 )
+				return -EINVAL;
+
+			/* The mountpoint part of the path is ended by a '/' */
+			if ( strlen ( nfs->mountpoint ) !=
+			     readlink_reply.path_len ) {
+				readlink_reply.path     += 1;
+				readlink_reply.path_len -= 1;
+			}
+
+			/* We are considering the last part of the absolute
+			 * path as a relative path from the mountpoint.
+			 */
+			readlink_reply.path     += strlen ( nfs->mountpoint );
+			readlink_reply.path_len -= strlen ( nfs->mountpoint );
+		}
 
 		new_filename = malloc ( readlink_reply.path_len +
 		                        strlen ( nfs->filename ) + 2 );
