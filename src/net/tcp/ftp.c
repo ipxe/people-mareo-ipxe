@@ -253,9 +253,20 @@ static void ftp_reply ( struct ftp_request *ftp ) {
 	if ( separator != ' ' )
 		return;
 
-	/* Ignore "intermediate" responses (1xx codes) */
 	if ( status_major == '1' )
+	{
+		/* Parse file size */
+		if ( ftp->state == FTP_RETR ) {
+			size_t filesize;
+			char *ptr = ftp->passive_text;
+
+			filesize = strtoull ( ptr, NULL, 10 );
+			xfer_seek ( &ftp->xfer, filesize );
+			xfer_seek ( &ftp->xfer, 0 );
+		}
+
 		return;
+	}
 
 	/* If the SIZE command is not supported by the server, we go to
 	 * the next step.
@@ -321,7 +332,6 @@ static void ftp_reply ( struct ftp_request *ftp ) {
 
 	/* Move to next state and send control string */
 	ftp_next_state ( ftp );
-	
 }
 
 /**
@@ -343,7 +353,7 @@ static int ftp_control_deliver ( struct ftp_request *ftp,
 	char *recvbuf = ftp->recvbuf;
 	size_t recvsize = ftp->recvsize;
 	char c;
-	
+
 	while ( len-- ) {
 		c = *(data++);
 		if ( ( c == '\r' ) || ( c == '\n' ) ) {
@@ -418,7 +428,7 @@ static void ftp_data_closed ( struct ftp_request *ftp, int rc ) {
 
 	DBGC ( ftp, "FTP %p data connection closed: %s\n",
 	       ftp, strerror ( rc ) );
-	
+
 	/* If there was an error, close control channel and record status */
 	if ( rc ) {
 		ftp_done ( ftp, rc );
