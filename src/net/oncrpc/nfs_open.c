@@ -630,10 +630,10 @@ static int nfs_parse_uri ( struct nfs_request *nfs, const struct uri *uri ) {
 	if ( nfs->hostname == NULL || *nfs->hostname == '\0' )
 		goto err;
 
-	if ( nfs->mountpoint == NULL || *nfs->hostname == '\0' )
+	if ( nfs->mountpoint == NULL || *nfs->mountpoint == '\0' )
 		goto err;
 
-	if ( nfs->filename == NULL || *nfs->hostname == '\0' )
+	if ( nfs->filename == NULL || *nfs->filename == '\0' )
 		goto err;
 
 	nfs->filename = strdup ( nfs->filename );
