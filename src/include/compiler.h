@@ -554,7 +554,7 @@ int __debug_disable;
 #define __unused __attribute__ (( unused ))
 
 /**
- * Declare a function as pure - i.e. without side effects
+ * Declare a function as pure - i.e. without side effects.
  */
 #define __pure __attribute__ (( pure ))
 
@@ -585,10 +585,13 @@ int __debug_disable;
  */
 #define __used __attribute__ (( used ))
 
-/** Declare a data structure to be aligned with 16-byte alignment */
+/** Declare a data structure to be aligned with 16-byte alignment. */
 #define __aligned __attribute__ (( aligned ( 16 ) ))
 
-/** Declare a function to be always inline */
+/** Declare a data structure to be packed. */
+#define __packed __attribute__ (( packed ))
+
+/** Declare a function to be always inline. */
 #define __always_inline __attribute__ (( always_inline ))
 
 /* Force all inline functions to not be instrumented

@@ -350,7 +350,7 @@ int netboot ( struct net_device *netdev ) {
 	filename = fetch_next_server_and_filename ( NULL );
 	if ( ! filename )
 		goto err_filename;
-	if ( ! uri_has_path ( filename ) ) {
+	if ( ! uri_has_path ( filename ) && ! uri_has_opaque ( filename ) ) {
 		/* Ignore empty filename */
 		uri_put ( filename );
 		filename = NULL;
