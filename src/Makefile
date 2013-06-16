@@ -49,6 +49,7 @@ ICCFIX		:= ./util/iccfix
 EINFO		:= ./util/einfo
 GENKEYMAP	:= ./util/genkeymap.pl
 DOXYGEN		:= doxygen
+LCAB		:= lcab
 BINUTILS_DIR	:= /usr
 BFD_DIR		:= $(BINUTILS_DIR)
 ZLIB_DIR	:= /usr
@@ -145,6 +146,23 @@ everything :
 		bin-x86_64-efi/ipxe.efirom \
 		bin-i386-linux/tap.linux bin-x86_64-linux/tap.linux \
 		bin-i386-linux/tests.linux bin-x86_64-linux/tests.linux
+
+###############################################################################
+#
+# VMware build target: all ROMs used with VMware
+#
+vmware : bin/8086100f.mrom bin/808610d3.mrom bin/10222000.rom bin/15ad07b0.rom
+	@$(ECHO) '==========================================================='
+	@$(ECHO) 
+	@$(ECHO) 'Available ROMs:'
+	@$(ECHO) '    bin/8086100f.mrom -- intel/e1000'
+	@$(ECHO) '    bin/808610d3.mrom -- intel/e1000e'
+	@$(ECHO) '    bin/10222000.rom  -- vlance/pcnet32'
+	@$(ECHO) '    bin/15ad07b0.rom  -- vmxnet3'
+	@$(ECHO) 
+	@$(ECHO) 'For more information, see http://ipxe.org/howto/vmware'
+	@$(ECHO)
+	@$(ECHO) '==========================================================='
 
 ###############################################################################
 #
