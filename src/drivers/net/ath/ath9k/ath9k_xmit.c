@@ -700,7 +700,7 @@ static void ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 
 		memset(&ts, 0, sizeof(ts));
 		status = ath9k_hw_txprocdesc(ah, ds, &ts);
-		if (status == -EINPROGRESS) {
+		if (errno_posix_equal(status, -EINPROGRESS)) {
 			break;
 		}
 

@@ -276,7 +276,7 @@ static struct ath_buf *ath_get_next_rx_buf(struct ath_softc *sc,
 	 * a self-linked list to avoid rx overruns.
 	 */
 	ret = ath9k_hw_rxprocdesc(ah, ds, rs, 0);
-	if (ret == -EINPROGRESS) {
+	if (errno_posix_equal(ret, -EINPROGRESS)) {
 		struct ath_rx_status trs;
 		struct ath_buf *tbf;
 		struct ath_desc *tds;
@@ -302,7 +302,7 @@ static struct ath_buf *ath_get_next_rx_buf(struct ath_softc *sc,
 
 		tds = tbf->bf_desc;
 		ret = ath9k_hw_rxprocdesc(ah, tds, &trs, 0);
-		if (ret == -EINPROGRESS)
+		if (errno_posix_equal(ret, -EINPROGRESS))
 			return NULL;
 	}
 
