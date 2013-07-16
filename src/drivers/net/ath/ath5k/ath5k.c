@@ -1176,7 +1176,7 @@ ath5k_handle_rx(struct ath5k_softc *sc)
 
 		ret = sc->ah->ah_proc_rx_desc(sc->ah, ds, &rs);
 		if (ret) {
-			if (ret != -EINPROGRESS) {
+			if (!errno_posix_equal(ret, -EINPROGRESS)) {
 				DBG("ath5k: error in processing rx desc: %s\n",
 				    strerror(ret));
 				net80211_rx_err(sc->dev, NULL, -ret);
@@ -1279,7 +1279,7 @@ ath5k_tx_processq(struct ath5k_softc *sc, struct ath5k_txq *txq)
 
 		ret = sc->ah->ah_proc_tx_desc(sc->ah, ds, &ts);
 		if (ret) {
-			if (ret != -EINPROGRESS) {
+			if (!errno_posix_equal(ret, -EINPROGRESS)) {
 				DBG("ath5k: error in processing tx desc: %s\n",
 				    strerror(ret));
 			} else {

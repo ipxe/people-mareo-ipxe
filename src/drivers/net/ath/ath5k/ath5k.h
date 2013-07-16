@@ -30,11 +30,13 @@ FILE_LICENCE ( MIT );
 #include <ipxe/net80211.h>
 #include <errno.h>
 
-/* Keep all ath5k files under one errfile ID */
-#undef ERRFILE
-#define ERRFILE ERRFILE_ath5k
-
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
+
+/* HACKISH */
+#define errno_posix_value(errno) \
+	(errno & 0x3f800000 )
+#define errno_posix_equal(a, b) \
+	( errno_posix_value( a ) == errno_posix_value( b ) )
 
 /* RX/TX descriptor hw structs */
 #include "desc.h"

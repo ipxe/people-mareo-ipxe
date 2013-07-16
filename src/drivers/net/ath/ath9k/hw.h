@@ -33,9 +33,11 @@ FILE_LICENCE ( BSD2 );
 
 #include "../regd.h"
 
-/* Keep all ath9k files under one errfile ID */
-#undef ERRFILE
-#define ERRFILE ERRFILE_ath9k
+/* HACKISH */
+#define errno_posix_value(errno) \
+	(errno & 0x3f800000 )
+#define errno_posix_equal(a, b) \
+	( errno_posix_value( a ) == errno_posix_value( b ) )
 
 #define ATHEROS_VENDOR_ID	0x168c
 
