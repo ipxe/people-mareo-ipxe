@@ -72,12 +72,13 @@ struct setting {
 #define SETTING_BOOT_EXTRA	10 /**< Generic boot additional settings */
 #define SETTING_SANBOOT		11 /**< SAN boot settings */
 #define SETTING_SANBOOT_EXTRA	12 /**< SAN boot additional settings */
-#define SETTING_HOST		13 /**< Host identity settings */
-#define SETTING_HOST_EXTRA	14 /**< Host identity additional settings */
-#define SETTING_AUTH		15 /**< Authentication settings */
-#define SETTING_AUTH_EXTRA	16 /**< Authentication additional settings */
-#define SETTING_CRYPTO		17 /**< Cryptography settings */
-#define SETTING_MISC		18 /**< Miscellaneous settings */
+#define SETTING_LLDP		13 /**< LLDP settings */
+#define SETTING_HOST		14 /**< Host identity settings */
+#define SETTING_HOST_EXTRA	15 /**< Host identity additional settings */
+#define SETTING_AUTH		16 /**< Authentication settings */
+#define SETTING_AUTH_EXTRA	17 /**< Authentication additional settings */
+#define SETTING_CRYPTO		18 /**< Cryptography settings */
+#define SETTING_MISC		19 /**< Miscellaneous settings */
 
 /** @} */
 
