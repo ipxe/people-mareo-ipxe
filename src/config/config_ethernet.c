@@ -38,3 +38,6 @@ REQUIRE_OBJECT ( aoe );
 #ifdef NET_PROTO_FCOE
 REQUIRE_OBJECT ( fcoe );
 #endif
+#ifdef NET_PROTO_LLDP
+REQUIRE_OBJECT ( lldp );
+#endif

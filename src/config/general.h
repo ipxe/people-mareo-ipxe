@@ -37,6 +37,7 @@ FILE_LICENCE ( GPL2_OR_LATER_OR_UBDL );
 #define	NET_PROTO_IPV4		/* IPv4 protocol */
 #undef	NET_PROTO_IPV6		/* IPv6 protocol */
 #undef	NET_PROTO_FCOE		/* Fibre Channel over Ethernet protocol */
+#undef	NET_PROTO_LLDP		/* LLDP protocol */
 
 /*
  * PXE support
