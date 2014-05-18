@@ -66,11 +66,6 @@ FILE_LICENCE ( GPL2_OR_LATER );
 
 /** A setting row widget */
 struct setting_row_widget {
-	/** Target configuration settings block
-	 *
-	 * Valid only for rows that lead to new settings blocks.
-	 */
-	struct settings *settings;
 	/** Configuration setting origin
 	 *
 	 * Valid only for rows that represent individual settings.
@@ -95,6 +90,8 @@ struct setting_row_widget {
 
 /** A settings widget */
 struct setting_widget {
+	/** Parent settings block */
+	struct settings *parent;
 	/** Settings block */
 	struct settings *settings;
 	/** Number of rows */
@@ -106,6 +103,30 @@ struct setting_widget {
 	/** Active row */
 	struct setting_row_widget row;
 };
+
+/* This variable is set to 1 each time a settings block is added or removed */
+static int settings_updated;
+
+static unsigned int get_settings ( const struct setting_widget *widget,
+                                       unsigned int index,
+				       struct settings **settings ) {
+	struct settings *s;
+	unsigned int count = 0;
+
+	if ( settings )
+		*settings = NULL;
+
+	/* Include parent settings block, if applicable */
+	if ( widget->parent && ( count++ == index ) && settings )
+		*settings = settings_target ( widget->parent );
+
+	/* Include any child settings blocks, if applicable */
+	list_for_each_entry ( s, &widget->settings->children, siblings )
+		if ( count++ == index && settings )
+			*settings = s;
+
+	return count;
+}
 
 /**
  * Select a setting row
@@ -120,7 +141,7 @@ static unsigned int select_setting_row ( struct setting_widget *widget,
 	struct settings *settings;
 	struct setting *setting;
 	struct setting *previous = NULL;
-	unsigned int count = 0;
+	unsigned int count;
 
 	/* Initialise structure */
 	memset ( &widget->row, 0, sizeof ( widget->row ) );
@@ -128,26 +149,19 @@ static unsigned int select_setting_row ( struct setting_widget *widget,
 	widget->row.row = ( SETTINGS_LIST_ROW + index - widget->first_visible );
 	widget->row.col = SETTINGS_LIST_COL;
 
-	/* Include parent settings block, if applicable */
-	if ( widget->settings->parent && ( count++ == index ) ) {
-		widget->row.settings = widget->settings->parent;
-		snprintf ( widget->row.value, sizeof ( widget->row.value ),
-			   "../" );
-	}
-
-	/* Include any child settings blocks, if applicable */
-	list_for_each_entry ( settings, &widget->settings->children, siblings ){
-		if ( count++ == index ) {
-			widget->row.settings = settings;
+	count = get_settings ( widget, index, &settings);
+	if ( settings ) {
+		if ( widget->parent && index == 0 )
+			snprintf ( widget->row.value,
+			           sizeof ( widget->row.value ), "../" );
+		else
 			snprintf ( widget->row.value,
 				   sizeof ( widget->row.value ), "%s/",
 				   settings->name );
-		}
 	}
 
 	/* Include any applicable settings */
 	for_each_table_entry ( setting, SETTINGS ) {
-
 		/* Skip inapplicable settings */
 		if ( ! setting_applies ( widget->settings, setting ) )
 			continue;
@@ -202,6 +216,7 @@ static size_t string_copy ( char *dest, const char *src, size_t len ) {
  */
 static void draw_setting_row ( struct setting_widget *widget ) {
 	SETTING_ROW_TEXT ( COLS ) text;
+	struct settings *settings;
 	unsigned int curs_offset;
 	char *value;
 
@@ -210,7 +225,8 @@ static void draw_setting_row ( struct setting_widget *widget ) {
 	text.nul = '\0';
 
 	/* Construct row content */
-	if ( widget->row.settings ) {
+	get_settings ( widget, widget->current, &settings );
+	if ( settings ) {
 
 		/* Construct space-padded name */
 		curs_offset = ( offsetof ( typeof ( text ), u.settings ) +
@@ -237,7 +253,7 @@ static void draw_setting_row ( struct setting_widget *widget ) {
 
 	/* Print row */
 	if ( ( widget->row.origin == widget->settings ) ||
-	     ( widget->row.settings != NULL ) ) {
+	     ( settings != NULL ) ) {
 		attron ( A_BOLD );
 	}
 	mvprintw ( widget->row.row, widget->row.col, "%s", text.start );
@@ -315,13 +331,14 @@ static void clearmsg ( unsigned int row ) {
  * @v fmt		printf() format string
  * @v args		printf() argument list
  */
-static void valert ( const char *fmt, va_list args ) {
+static void valert ( unsigned int duration, const char *fmt, va_list args ) {
 	clearmsg ( ALERT_ROW );
 	color_set ( CPAIR_ALERT, NULL );
 	vmsg ( ALERT_ROW, fmt, args );
-	sleep ( 2 );
+	sleep ( duration );
 	color_set ( CPAIR_NORMAL, NULL );
-	clearmsg ( ALERT_ROW );
+	if ( duration )
+		clearmsg ( ALERT_ROW );
 }
 
 /**
@@ -330,11 +347,11 @@ static void valert ( const char *fmt, va_list args ) {
  * @v fmt		printf() format string
  * @v ...		printf() arguments
  */
-static void alert ( const char *fmt, ... ) {
+static void alert ( unsigned int duration, const char *fmt, ... ) {
 	va_list args;
 
 	va_start ( args, fmt );
-	valert ( fmt, args );
+	valert ( duration, fmt, args );
 	va_end ( args );
 }
 
@@ -445,7 +462,22 @@ static void reveal_setting_row ( struct setting_widget *widget,
 	}
 }
 
-/**
+static void free_widget ( struct setting_widget *widget ) {
+	struct settings *i;
+	struct refcnt *refcnt;
+
+	for ( i = widget->settings; i; ) {
+		/* We need to get i->parent before performing ref_put() on i
+		 * because it might be free()ed.
+		 */
+		refcnt = i->refcnt;
+		i = i->parent;
+		ref_put ( refcnt );
+	}
+	widget->settings = NULL;
+}
+
+/*
  * Reveal setting row
  *
  * @v widget		Setting widget
@@ -454,12 +486,62 @@ static void reveal_setting_row ( struct setting_widget *widget,
 static void init_widget ( struct setting_widget *widget,
 			  struct settings *settings ) {
 
+	struct settings *i;
+
+	for ( i = settings_target ( settings ); i; i = i->parent )
+		ref_get ( i->refcnt );
+
+	free_widget ( widget );
+
+	if ( ! settings->parent && settings != find_settings ( "" ) ) {
+		widget->parent = find_settings ( "" );
+		alert ( 2, "The parent settings block has been deleted!\n" );
+	} else
+		widget->parent = settings->parent;
+
 	widget->settings = settings_target ( settings );
 	widget->num_rows = select_setting_row ( widget, 0 );
 	widget->first_visible = SETTINGS_LIST_ROWS;
 	draw_title_row ( widget );
 	reveal_setting_row ( widget, 0 );
 	select_setting_row ( widget, 0 );
+}
+
+static int check_for_changes ( struct setting_widget *widget ) {
+	struct settings *settings = widget->settings;
+	unsigned int index = widget->current;
+
+	if ( ! settings_updated )
+		/* No changes */
+		return 0;
+
+	if ( widget->settings->parent != widget->parent ) {
+		settings = find_child_settings ( widget->parent,
+		                                 widget->settings->name );
+		if ( settings )
+			alert ( 0, "This settings block has been updated!\n" );
+		else {
+			settings = widget->parent;
+			index = 0;
+			alert ( 2, "This settings block has been deleted!\n" );
+		}
+	}
+
+	init_widget ( widget, settings );
+	if ( index > widget->num_rows )
+		index = widget->num_rows - 1;
+
+	reveal_setting_row ( widget, index );
+	select_setting_row ( widget, index );
+
+	/* Add selection border on the new current row */
+	color_set ( ( widget->row.editing ? CPAIR_EDIT : CPAIR_SELECT ), NULL );
+	draw_setting_row ( widget );
+	color_set ( CPAIR_NORMAL, NULL );
+
+	settings_updated = 0;
+
+	return 1;
 }
 
 static int main_loop ( struct settings *settings ) {
@@ -476,7 +558,6 @@ static int main_loop ( struct settings *settings ) {
 	init_widget ( &widget, settings );
 
 	while ( 1 ) {
-
 		/* Redraw rows if necessary */
 		if ( redraw ) {
 			draw_info_row ( &widget );
@@ -505,21 +586,33 @@ static int main_loop ( struct settings *settings ) {
 			case CR:
 			case LF:
 				if ( ( rc = save_setting ( &widget ) ) != 0 )
-					alert ( " %s ", strerror ( rc ) );
+					alert ( 2, " %s ", strerror ( rc ) );
+
+				/* Do not trigger complete UI update */
+				settings_updated = 0;
+
 				/* Fall through */
 			case CTRL_C:
 				select_setting_row ( &widget, widget.current );
 				redraw = 1;
 				break;
+			case CTRL_X:
+				goto end;
 			default:
 				/* Do nothing */
 				break;
 			}
 
 		} else {
-
 			/* Process keypress */
-			key = getkey ( 0 );
+			key = getkey ( TICKS_PER_SEC / 2 );
+
+			if ( check_for_changes ( &widget ) )
+				continue;
+
+			if ( key < 0 )
+				continue;
+
 			move = 0;
 			switch ( key ) {
 			case KEY_UP:
@@ -547,18 +640,21 @@ static int main_loop ( struct settings *settings ) {
 					break;
 				if ( ( rc = delete_setting ( widget.settings,
 						&widget.row.setting ) ) != 0 ) {
-					alert ( " %s ", strerror ( rc ) );
+					alert ( 2, " %s ", strerror ( rc ) );
 				}
+				/* Do not trigger complete UI update */
+				settings_updated = 0;
 				select_setting_row ( &widget, widget.current );
 				redraw = 1;
 				break;
 			case CTRL_X:
-				return 0;
+				goto end;
 			case CR:
 			case LF:
-				if ( widget.row.settings ) {
-					init_widget ( &widget,
-						      widget.row.settings );
+				get_settings ( &widget, widget.current,
+				               &settings );
+				if ( settings ) {
+					init_widget ( &widget, settings );
 					redraw = 1;
 				}
 				/* Fall through */
@@ -584,6 +680,10 @@ static int main_loop ( struct settings *settings ) {
 			}
 		}
 	}
+
+end:
+	free_widget ( &widget );
+	return 0;
 }
 
 int settings_ui ( struct settings *settings ) {
@@ -594,10 +694,22 @@ int settings_ui ( struct settings *settings ) {
 	color_set ( CPAIR_NORMAL, NULL );
 	curs_set ( 0 );
 	erase();
-	
+
 	rc = main_loop ( settings );
 
 	endwin();
 
 	return rc;
 }
+
+static int settings_ui_apply_settings ( void ) {
+	settings_updated = 1;
+	return 0;
+}
+
+/* We use a settings applicator to know when settings blocks are added or
+ * removed.
+ */
+struct settings_applicator settings_ui_applicator __settings_applicator = {
+	.apply = settings_ui_apply_settings,
+};
