@@ -87,6 +87,9 @@ REQUIRE_OBJECT ( efi_console );
 #ifdef CONSOLE_LINUX
 REQUIRE_OBJECT ( linux_console );
 #endif
+#ifdef CONSOLE_LINUX_STDERR
+REQUIRE_OBJECT ( linux_console_stderr );
+#endif
 #ifdef CONSOLE_VMWARE
 REQUIRE_OBJECT ( vmconsole );
 #endif
