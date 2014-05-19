@@ -264,8 +264,8 @@ static struct option_descriptor inc_opts[] = {};
 
 /** "inc" command descriptor */
 static struct command_descriptor inc_cmd =
-	COMMAND_DESC ( struct inc_options, inc_opts, 1, 2,
-		       "<setting> [<increment>]" );
+	COMMAND_DESC ( struct inc_options, inc_opts, 1, MAX_ARGUMENTS,
+		       "<setting> [<increment>...]" );
 
 /**
  * "inc" command
@@ -277,7 +277,7 @@ static struct command_descriptor inc_cmd =
 static int inc_exec ( int argc, char **argv ) {
 	struct inc_options opts;
 	struct named_setting setting;
-	unsigned int increment = 1;
+	unsigned int increment;
 	unsigned long value;
 	int rc;
 
@@ -289,11 +289,6 @@ static int inc_exec ( int argc, char **argv ) {
 	if ( ( rc = parse_existing_setting ( argv[optind], &setting ) ) != 0 )
 		goto err_parse_setting;
 
-	/* Parse increment (if present) */
-	if ( ( ( optind + 1 ) < argc ) &&
-	     ( ( rc = parse_integer ( argv[ optind + 1 ], &increment ) ) != 0))
-		goto err_parse_increment;
-
 	/* Read existing value, treating errors as equivalent to a
 	 * zero-valued :int32 initial setting.
 	 */
@@ -304,8 +299,19 @@ static int inc_exec ( int argc, char **argv ) {
 			setting.setting.type = &setting_type_int32;
 	}
 
-	/* Increment value */
-	value += increment;
+	if ( optind + 1 >= argc )
+		value++;
+
+	/* Parse increment (if present) */
+	while ( ++optind < argc ) {
+		if ( ( optind < argc ) &&
+		     ( ( rc = parse_integer ( argv[ optind ],
+			                      &increment ) ) != 0 ) )
+			goto err_parse_increment;
+
+		/* Increment value */
+		value += increment;
+	}
 
 	/* Store updated setting value */
 	if ( ( rc = storen_setting ( setting.settings, &setting.setting,
