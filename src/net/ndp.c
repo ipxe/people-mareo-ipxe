@@ -916,11 +916,12 @@ ipv6conf_rx_router_advertisement ( struct net_device *netdev,
 	/* Identify IPv6 configurator, if any */
 	ipv6conf = ipv6conf_demux ( netdev );
 	if ( ! ipv6conf ) {
-		/* Not an error; router advertisements are processed
-		 * as a background activity even when no explicit
-		 * autoconfiguration is taking place.
+		/* Router advertisements are processed as a background activity
+		 * even when no explicit autoconfiguration is taking place.
 		 */
-		return 0;
+		option_len = ( len - offsetof ( typeof ( *radv ), option ) );
+		rc = ndp_register_settings ( netdev, radv->option, option_len );
+		return rc;
 	}
 
 	/* If this is not the first solicited router advertisement, ignore it */
