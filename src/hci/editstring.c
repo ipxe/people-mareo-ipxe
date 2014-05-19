@@ -21,6 +21,7 @@ FILE_LICENCE ( GPL2_OR_LATER );
 
 #include <assert.h>
 #include <string.h>
+#include <ctype.h>
 #include <ipxe/keys.h>
 #include <ipxe/editstring.h>
 
@@ -39,6 +40,8 @@ static void delete_character ( struct edit_string *string ) __nonnull;
 static void backspace ( struct edit_string *string ) __nonnull;
 static void kill_sol ( struct edit_string *string ) __nonnull;
 static void kill_eol ( struct edit_string *string ) __nonnull;
+static void kill_word ( struct edit_string *string ) __nonnull;
+static void previous_word ( struct edit_string *string ) __nonnull;
 
 /**
  * Insert and/or delete text within an editable string
@@ -122,6 +125,18 @@ static void kill_sol ( struct edit_string *string ) {
 }
 
 /**
+ * Delete to start of previous word
+ *
+ * @v string           Editable string
+ */
+static void kill_word ( struct edit_string *string ) {
+	size_t old_cursor = string->cursor;
+	previous_word ( string );
+	insert_delete ( string, old_cursor - string->cursor, NULL );
+}
+
+
+/**
  * Delete to end of line
  *
  * @v string		Editable string
@@ -140,6 +155,16 @@ void replace_string ( struct edit_string *string, const char *replacement ) {
 	string->cursor = 0;
 	insert_delete ( string, ~( ( size_t ) 0 ), replacement );
 }
+
+static void previous_word ( struct edit_string *string ) {
+	while ( string->cursor && isspace ( string->buf[--string->cursor] ) )
+		;
+
+	while ( string->cursor &&
+	        ( ! isspace ( string->buf[string->cursor - 1] ) ) )
+		--string->cursor;
+}
+
 
 /**
  * Edit editable string
@@ -180,6 +205,10 @@ int edit_string ( struct edit_string *string, int key ) {
 	case CTRL_D:
 		/* Delete character */
 		delete_character ( string );
+		break;
+	case CTRL_W:
+		/* Delete word */
+		kill_word ( string );
 		break;
 	case CTRL_U:
 		/* Delete to start of line */
