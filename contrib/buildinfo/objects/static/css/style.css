@@ -1,0 +1,87 @@
+html,
+body {
+	height: 100%;
+	/* The html and body elements cannot have any padding or margin. */
+}
+
+/* Wrapper for page content to push down footer */
+#wrap {
+	min-height: 100%;
+	height: auto !important;
+	height: 100%;
+	/* Negative indent footer by its height */
+	margin: 0 auto -60px;
+	/* Pad bottom by footer height */
+	padding: 0 0 60px;
+}
+
+/* Set the fixed height of the footer here */
+#footer {
+	height: 60px;
+	background-color: #f5f5f5;
+}
+
+.container .credit {
+	margin: 20px 0;
+}
+
+#footer > .container {
+	padding-left: 15px;
+	padding-right: 15px;
+}
+
+.alert-box {
+	margin-bottom: 20px;
+}
+
+.alert-box > .alert {
+	margin-bottom: 5px;
+}
+
+.table tbody > tr > th {
+	width: 0px;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.text-muted {
+	margin: 0px;
+}
+
+.room {
+	width: 150px;
+}
+
+.container {
+	margin-right: auto;
+	margin-left: auto;
+	max-width: 800px; /* or 950px */
+}
+
+.navbar-toggle {
+	margin-right: 8px;
+}
+
+.navbar-toggle > span {
+	color: #fff;
+}
+
+.navbar-right > li {
+	position: relative;
+	float: right;
+	margin-top: 8px;
+	margin-right: 8px;
+	margin-bottom: 8px;
+	background-color: transparent;
+	border: 1px solid rgb(51, 51, 51);
+	border-radius: 4px 4px 4px 4px;
+}
+
+.navbar-right > li > a {
+	color: white;
+	padding: 9px 10px;
+}
+
+.navbar-inverse .navbar-nav > li > a {
+    color: white;
+}

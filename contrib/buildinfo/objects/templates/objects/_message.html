@@ -1,0 +1,17 @@
+<div class="alert {{ tags }}{% if dismissable %} alert-dismissable{% endif %}">
+    {% if dismissable %}
+        <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+    {% endif %}
+    <p>
+        {% if level == 20 %}
+        <span class="glyphicon glyphicon-info-sign"></span>
+        {% elif level == 25 %}
+        <span class="glyphicon glyphicon-ok"></span>
+        {% elif level == 30 %}
+        <span class="glyphicon glyphicon-warning-sign"></span>
+        {% elif level == 40 %}
+        <span class="glyphicon glyphicon-exclamation-sign"></span>
+        {% endif %}
+        {{ message|safe }}
+    </p>
+</div>

@@ -1,0 +1,90 @@
+{% extends "objects/_base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+    <div class="container">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h3 class="panel-title">Executable size charts</h3>
+            </div>
+            <div class="panel-body">
+                <p>Executable size charts, commit-by-commit.</p>
+                <ul class="nav nav-tabs">
+                {% for object in object_list %}
+                <li{% if forloop.counter == 1 %} class="active"{% endif %}><a href="#{{ object.title|slugify }}" data-toggle="tab" class="reflow-chart-{{ object.title|slugify }}">{{ object.title }}</a></li>
+                {% endfor %}
+                </ul>
+                <div class="tab-content">
+                {% for object in object_list %}
+                    <div class="tab-pane{% if forloop.counter == 1 %} active{% endif %}" id="{{ object.title|slugify }}" style="height: 500px; margin: 0 auto"></div>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js %}
+{{ block.super }}
+<script src="{% static "js/highcharts.js" %}"></script>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        {% for object in object_list %}
+        $.getJSON("{% url 'data' target=object.target name=object.name %}", function(data) {
+            var options = {
+                chart: {
+                    renderTo: '{{ object.title|slugify }}',
+                    zoomType: 'x'
+                },
+                title: {
+                    text: '{{ object.title }}'
+                },
+                xAxis: {
+                    type: 'datetime',
+                    dateTimeLabelFormats: {
+                        month: '%e. %b',
+                        year: '%b'
+                    }
+                },
+                yAxis: {
+                    title: {
+                        text: 'Object size (bytes)'
+                    },
+                },
+                tooltip: {
+                    crosshairs: [true, true],
+                    followPointer: true,
+                    shared: true,
+                    useHTML: true,
+                    headerFormat: '<table><tr><th colspan="2">{point.key}</th></tr>',
+                    pointFormat: '<tr><td style="color: {series.color}">{series.name}</td><td style="text-align: right">{point.y}</td></tr>',
+                    valueSuffix: ' bytes',
+                    footerFormat: '</table>'
+                },
+                plotOptions: {
+                    series: {
+                        marker: {
+                            enabled: true,
+                            fillColor: '#FFFFFF',
+                            lineColor: null,
+                            lineWidth: 1,
+                            radius: 2
+                        },
+                        shadow: true
+                    }
+                },
+                series: data
+            };
+
+            var chart = new Highcharts.Chart(options);
+            $('a[data-toggle="tab"], .reflow-chart-{{ object.title|slugify }}').on('shown.bs.tab', function (e) {
+                $("#{{ object.title|slugify }}").highcharts().reflow();
+            });
+        });
+        {% endfor %}
+    });
+
+
+</script>
+{% endblock %}

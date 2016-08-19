@@ -1,0 +1,76 @@
+{% load jstimestamp %}
+[
+{% if object_list %}
+	{
+		"type": "line",
+		"name": "{{ object_list.0.name }}",
+		"step": "left",
+		"data": [
+			{% for object in object_list %}
+				{% if forloop.counter > 1 %}
+					,
+				{% endif %}
+				{
+					"x": {{ object.commit.datetime|to_jstimestamp }},
+					"y": {{ object.size }},
+					"name": "{{ object.commit.title|escapejs }}"
+				}
+			{% endfor %}
+		]
+	},
+	{
+		"type": "line",
+		"name": ".text",
+		"visible": false,
+		"step": "left",
+		"data": [
+			{% for object in object_list %}
+				{% if forloop.counter > 1 %}
+					,
+				{% endif %}
+				{
+					"x": {{ object.commit.datetime|to_jstimestamp }},
+					"y": {{ object.text_size }},
+					"name": "{{ object.commit.title|escapejs }}"
+				}
+			{% endfor %}
+		]
+	},
+	{
+		"type": "line",
+		"name": ".data",
+		"visible": false,
+		"step": "left",
+		"data": [
+			{% for object in object_list %}
+				{% if forloop.counter > 1 %}
+					,
+				{% endif %}
+				{
+					"x": {{ object.commit.datetime|to_jstimestamp }},
+					"y": {{ object.data_size }},
+					"name": "{{ object.commit.title|escapejs }}"
+				}
+			{% endfor %}
+		]
+	},
+	{
+		"type": "line",
+		"name": ".bss",
+		"visible": false,
+		"step": "left",
+		"data": [
+			{% for object in object_list %}
+				{% if forloop.counter > 1 %}
+					,
+				{% endif %}
+				{
+					"x": {{ object.commit.datetime|to_jstimestamp }},
+					"y": {{ object.bss_size }},
+					"name": "{{ object.commit.title|escapejs }}"
+				}
+			{% endfor %}
+		]
+	}
+{% endif %}
+]

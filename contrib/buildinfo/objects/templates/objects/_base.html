@@ -1,0 +1,79 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="">
+        <meta name="author" content="Marin Hannache">
+        <link rel="shortcut icon" href="{% static "pictures/favicon.ico" %}">
+
+        <title>{% block title %}iPXE builds information{% endblock %}</title>
+
+        <!-- Bootstrap core CSS -->
+        <link href="{% static "css/bootstrap.css" %}" rel="stylesheet">
+
+        <!-- Custom styles for this template -->
+        <link href="{% static "css/style.css" %}" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+        <script src="{% static "js/html5shiv.js" %}"></script>
+        <script src="{% static "js/respond.min.js" %}"></script>
+        <![endif]-->
+    </head>
+
+    <body>
+        <!-- Wrap all page content here -->
+        <div id="wrap">
+
+            {% block navbar %}
+            <!-- navbar -->
+            <div id="navbar" class="navbar navbar-inverse navbar-static-top">
+                <div class="container">
+                    <div class="navbar-header">
+                        {% block brand %}<a class="navbar-brand" href="{% url 'index' %}"><span class="glyphicon glyphicon-wrench"></span> iPXE</a>{% endblock %}
+                        </ul>
+                    </div><!--/.nav-collapse -->
+                </div>
+            </div>
+            {% endblock %}
+            <div class="container">
+                {% block messages %}
+                <div class="alert-box">
+                    {% for message in messages %}
+                    {% include "objects/_message.html" with dismissable=True message=message tags=message.tags level=message.level only %}
+                    {% endfor %}
+                    {% for alert in alerts %}
+                    {% include "objects/_message.html" with dismissable=False message=alert.message tags="alert-"|add:alert.tags level=alert.level only %}
+                    {% endfor %}
+                </div>
+                {% endblock %}
+
+                {% block content %}
+                {% endblock %}
+            </div>
+        </div>
+
+        <div id="footer">
+            {% include "objects/_footer.html" only %}
+        </div>
+
+        {% block modals %}
+        {% endblock %}
+
+        {% block js %}
+        <!-- Bootstrap core JavaScript
+        ================================================== -->
+        <!-- Placed at the end of the document so the pages load faster -->
+        <script src="http://code.jquery.com/jquery.js"></script>
+        <script src="{% static "js/bootstrap.min.js" %}"></script>
+
+        <script type="text/javascript">
+            $(function () {
+                $('.tp').tooltip();
+            });
+        </script>
+        {% endblock %}
+    </body>
+</html>

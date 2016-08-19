@@ -1,0 +1,13 @@
+{% extends "objects/_base.html" %}
+{% load staticfiles %}
+
+{% block title %}{{ block.super }} - Page introuvable{% endblock %}
+
+{% block content %}
+<div class="well">
+    <h2 class="text-danger"><span class="glyphicon glyphicon-minus-sign"></span>
+	    Cette page n'existe pas</h2>
+    <p><small><a href="{% url 'index' %}"><span class="glyphicon glyphicon-home"></span> Retourner à la page d'accueil</a></small></p>
+    <img class="img-responsive thumbnail" src="{% static "pictures/404.png" %}" width="563" height="500" alt="Erreur 404" />
+</div>
+{% endblock %}
