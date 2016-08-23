@@ -65,6 +65,11 @@ const struct setting chip_setting __setting ( SETTING_NETDEV, chip ) = {
 	.description = "Chip",
 	.type = &setting_type_string,
 };
+const struct setting linkspeed_setting __setting ( SETTING_NETDEV, linkspeed ) = {
+	.name = "linkspeed",
+	.description = "Link speed",
+	.type = &setting_type_uint32,
+};
 const struct setting ifname_setting __setting ( SETTING_NETDEV, ifname ) = {
 	.name = "ifname",
 	.description = "Interface name",
@@ -206,6 +211,27 @@ static int netdev_fetch_chip ( struct net_device *netdev, void *data,
 }
 
 /**
+ * Fetch linkspeed setting
+ *
+ * @v netdev		Network device
+ * @v data		Buffer to fill with setting data
+ * @v len		Length of buffer
+ * @ret len		Length of setting data, or negative error
+ */
+static int netdev_fetch_linkspeed ( struct net_device *netdev, void *data,
+			            size_t len ) {
+	uint32_t linkspeed = cpu_to_be32(netdev->link_speed);
+	if (!linkspeed)
+		return -ENOENT;
+
+	if (len > sizeof ( linkspeed ))
+		len = sizeof ( linkspeed );
+
+	memcpy ( data, &linkspeed, len );
+	return sizeof ( linkspeed );
+}
+
+/**
  * Fetch ifname setting
  *
  * @v netdev		Network device
@@ -251,6 +277,7 @@ static struct netdev_setting_operation netdev_setting_operations[] = {
 	{ &busloc_setting, NULL, netdev_fetch_busloc },
 	{ &busid_setting, NULL, netdev_fetch_busid },
 	{ &chip_setting, NULL, netdev_fetch_chip },
+	{ &linkspeed_setting, NULL, netdev_fetch_linkspeed },
 	{ &ifname_setting, NULL, netdev_fetch_ifname },
 };
 

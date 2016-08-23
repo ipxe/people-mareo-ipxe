@@ -393,6 +393,8 @@ struct net_device {
 	 * indicates the error preventing link-up.
 	 */
 	int link_rc;
+	/** Link speel */
+	uint32_t link_speed;
 	/** Link block timer */
 	struct retry_timer link_block;
 	/** Maximum packet length

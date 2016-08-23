@@ -721,6 +721,7 @@ int undinet_probe ( struct undi_device *undi ) {
 	DBGC ( undinic, "UNDINIC %p has type %s, speed %d, flags %08x\n",
 	       undinic, undi_iface.IfaceType, undi_iface.LinkSpeed,
 	       undi_iface.ServiceFlags );
+	netdev->link_speed = undi_iface.LinkSpeed;
 	if ( ( undi_iface.ServiceFlags & SUPPORTED_IRQ ) &&
 	     ( undinic->irq != 0 ) ) {
 		undinic->irq_supported = 1;
